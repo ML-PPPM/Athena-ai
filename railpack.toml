@@ -1,2 +1,2 @@
 [build]
-cmd = "streamlit run streamlit_app.py"
+start = "streamlit run streamlit_app.py"
