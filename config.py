@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """Application settings from environment variables."""
 
     # Anthropic
-    ANTHROPIC_API_KEY: str
+    ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
 
     # Supabase
@@ -29,22 +29,32 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
-# Load settings
-try:
-    settings = Settings()
-except Exception as e:
-    # If .env doesn't exist, try to load from Streamlit secrets
-    import streamlit as st
+def _get_streamlit_secret(key: str, default=""):
+    """Safely retrieve a value from Streamlit secrets at runtime.
 
-    settings = Settings(
-        ANTHROPIC_API_KEY=st.secrets.get("ANTHROPIC_API_KEY", ""),
-        SUPABASE_URL=st.secrets.get("SUPABASE_URL", ""),
-        SUPABASE_KEY=st.secrets.get("SUPABASE_KEY", ""),
-        STRIPE_PUBLIC_KEY=st.secrets.get("STRIPE_PUBLIC_KEY", ""),
-        STRIPE_SECRET_KEY=st.secrets.get("STRIPE_SECRET_KEY", ""),
-        DEBUG=st.secrets.get("DEBUG", False),
-        ENVIRONMENT=st.secrets.get("ENVIRONMENT", "development"),
-    )
+    Falls back to ``default`` if Streamlit is not running or the key is absent.
+    This must never be called at import/build time.
+    """
+    try:
+        import streamlit as st
+
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
+
+
+# Load settings — prefer environment variables (available during build and at
+# runtime on Railway) and only fall back to Streamlit secrets at runtime.
+settings = Settings(
+    ANTHROPIC_API_KEY=os.getenv("ANTHROPIC_API_KEY", "") or _get_streamlit_secret("ANTHROPIC_API_KEY", ""),
+    ANTHROPIC_MODEL=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+    SUPABASE_URL=os.getenv("SUPABASE_URL", "") or _get_streamlit_secret("SUPABASE_URL", ""),
+    SUPABASE_KEY=os.getenv("SUPABASE_KEY", "") or _get_streamlit_secret("SUPABASE_KEY", ""),
+    STRIPE_PUBLIC_KEY=os.getenv("STRIPE_PUBLISHABLE_KEY", "") or os.getenv("STRIPE_PUBLIC_KEY", "") or _get_streamlit_secret("STRIPE_PUBLIC_KEY", ""),
+    STRIPE_SECRET_KEY=os.getenv("STRIPE_SECRET_KEY", "") or _get_streamlit_secret("STRIPE_SECRET_KEY", ""),
+    DEBUG=os.getenv("DEBUG", "").lower() in ("1", "true", "yes"),
+    ENVIRONMENT=os.getenv("ENVIRONMENT", "") or _get_streamlit_secret("ENVIRONMENT", "development"),
+)
 
 
 # App Constants
