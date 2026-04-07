@@ -4,8 +4,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    GOOGLE_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
     STRIPE_PUBLIC_KEY: str = ""
@@ -28,8 +28,8 @@ def _get_streamlit_secret(key, default=""):
 
 
 settings = Settings(
-    GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY", "") or _get_streamlit_secret("GOOGLE_API_KEY"),
-    GEMINI_MODEL=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
+    GROQ_API_KEY=os.getenv("GROQ_API_KEY", "") or _get_streamlit_secret("GROQ_API_KEY"),
+    GROQ_MODEL=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
     SUPABASE_URL=os.getenv("SUPABASE_URL", "") or _get_streamlit_secret("SUPABASE_URL"),
     SUPABASE_KEY=os.getenv("SUPABASE_KEY", "") or _get_streamlit_secret("SUPABASE_KEY"),
     STRIPE_PUBLIC_KEY=os.getenv("STRIPE_PUBLIC_KEY", "") or _get_streamlit_secret("STRIPE_PUBLIC_KEY"),
