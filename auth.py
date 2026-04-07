@@ -2,7 +2,7 @@
 
 import logging
 import streamlit as st
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 from datetime import datetime
 
 from database import db
