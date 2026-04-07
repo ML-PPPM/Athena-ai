@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Application settings from environment variables."""
     GOOGLE_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
     SUPABASE_URL: str = ""
@@ -20,7 +19,7 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
-def _get_streamlit_secret(key: str, default=""):
+def _get_streamlit_secret(key, default=""):
     try:
         import streamlit as st
         return st.secrets.get(key, default)
@@ -29,12 +28,12 @@ def _get_streamlit_secret(key: str, default=""):
 
 
 settings = Settings(
-    GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY", "") or _get_streamlit_secret("GOOGLE_API_KEY", ""),
+    GOOGLE_API_KEY=os.getenv("GOOGLE_API_KEY", "") or _get_streamlit_secret("GOOGLE_API_KEY"),
     GEMINI_MODEL=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
-    SUPABASE_URL=os.getenv("SUPABASE_URL", "") or _get_streamlit_secret("SUPABASE_URL", ""),
-    SUPABASE_KEY=os.getenv("SUPABASE_KEY", "") or _get_streamlit_secret("SUPABASE_KEY", ""),
-    STRIPE_PUBLIC_KEY=os.getenv("STRIPE_PUBLIC_KEY", "") or _get_streamlit_secret("STRIPE_PUBLIC_KEY", ""),
-    STRIPE_SECRET_KEY=os.getenv("STRIPE_SECRET_KEY", "") or _get_streamlit_secret("STRIPE_SECRET_KEY", ""),
+    SUPABASE_URL=os.getenv("SUPABASE_URL", "") or _get_streamlit_secret("SUPABASE_URL"),
+    SUPABASE_KEY=os.getenv("SUPABASE_KEY", "") or _get_streamlit_secret("SUPABASE_KEY"),
+    STRIPE_PUBLIC_KEY=os.getenv("STRIPE_PUBLIC_KEY", "") or _get_streamlit_secret("STRIPE_PUBLIC_KEY"),
+    STRIPE_SECRET_KEY=os.getenv("STRIPE_SECRET_KEY", "") or _get_streamlit_secret("STRIPE_SECRET_KEY"),
     DEBUG=os.getenv("DEBUG", "").lower() in ("1", "true", "yes"),
     ENVIRONMENT=os.getenv("ENVIRONMENT", "") or _get_streamlit_secret("ENVIRONMENT", "development"),
 )
