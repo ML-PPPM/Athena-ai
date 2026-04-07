@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 import json
 import re
 import logging
@@ -17,7 +17,6 @@ from payments import render_pricing_table
 # ║        📚 Learn   🧠 Quiz   📝 Past Paper   📋 Planner        ║
 # ╚════════════════════════════════════════════════════════════════╝
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -45,7 +44,7 @@ if not st.session_state.get("is_authenticated"):
 # USER AUTHENTICATED - CONTINUE WITH APP
 # ═══════════════════════════════════════════════════════════════════
 
-MODEL = settings.GEMINI_MODEL
+MODEL = settings.GROQ_MODEL
 MAX_CHAT_HISTORY_LIMIT = MAX_CHAT_HISTORY
 
 
@@ -361,30 +360,30 @@ RULES:
 
 
 # ╔════════════════════════════════════════════════════════════════╗
-# ║                       API CLIENT (GEMINI)                      ║
+# ║                       API CLIENT (GROQ)                        ║
 # ╚════════════════════════════════════════════════════════════════╝
 
 @st.cache_resource
 def get_client():
-    """Initialize and cache the Gemini client."""
+    """Initialize and cache the Groq client."""
     try:
-        api_key = st.secrets.get("GOOGLE_API_KEY", "") or settings.GOOGLE_API_KEY
+        api_key = st.secrets.get("GROQ_API_KEY", "") or settings.GROQ_API_KEY
         if not api_key:
-            st.error("⚠️ `GOOGLE_API_KEY` not found in Streamlit secrets.")
+            st.error("⚠️ `GROQ_API_KEY` not found in Streamlit secrets.")
             st.info(
                 "Add it to Streamlit secrets:\n"
-                '```\nGOOGLE_API_KEY = "AIza…"\n```'
+                '```\nGROQ_API_KEY = "gsk_..."\n```'
             )
             st.stop()
-        genai.configure(api_key=api_key)
-        logger.info("Gemini client initialized successfully")
-        return True
+        c = Groq(api_key=api_key)
+        logger.info("Groq client initialized successfully")
+        return c
     except Exception as e:
-        st.error(f"⚠️ Failed to initialize Gemini: {e}")
+        st.error(f"⚠️ Failed to initialize Groq: {e}")
         st.stop()
 
 
-get_client()
+client = get_client()
 
 
 # ╔════════════════════════════════════════════════════════════════╗
@@ -426,21 +425,17 @@ def parse_json(text):
     """Robustly extract a JSON object from AI response."""
     if not text:
         return None
-
     text = text.strip()
-
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-
     code_match = re.search(r"```(?:json)?\s*(\{[^`]*\})\s*```", text, re.DOTALL)
     if code_match:
         try:
             return json.loads(code_match.group(1))
         except json.JSONDecodeError:
             pass
-
     first_brace = text.find("{")
     last_brace = text.rfind("}")
     if first_brace != -1 and last_brace > first_brace:
@@ -448,7 +443,6 @@ def parse_json(text):
             return json.loads(text[first_brace : last_brace + 1])
         except json.JSONDecodeError:
             pass
-
     logger.warning(f"parse_json: all strategies failed for: {text[:100]}...")
     return None
 
@@ -466,66 +460,56 @@ def validate_mc(data):
 
 
 def call_claude(system, user_msg, max_tokens=DEFAULT_MAX_TOKENS):
-    """Single-turn Gemini call with error handling."""
+    """Single-turn Groq call with error handling."""
     try:
-        logger.info(f"Gemini call: max_tokens={max_tokens}")
-        model = genai.GenerativeModel(
-            MODEL,
-            system_instruction=system
+        logger.info(f"Groq call: max_tokens={max_tokens}")
+        response = client.chat.completions.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            temperature=0.7,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ],
         )
-        response = model.generate_content(
-            user_msg,
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.7,
-            ),
-        )
-        if response and response.text:
-            logger.info("Gemini response successful")
-            return response.text
-        logger.warning("Gemini returned empty response")
+        if response and response.choices:
+            logger.info("Groq response successful")
+            return response.choices[0].message.content
+        logger.warning("Groq returned empty response")
         return None
     except Exception as e:
-        logger.error(f"Gemini error: {e}", exc_info=True)
+        logger.error(f"Groq error: {e}", exc_info=True)
         st.error(f"❌ AI Error: {e}")
         return None
 
 
 def call_claude_stream(system, messages, max_tokens=1500):
-    """Streaming generator for multi-turn chat using Gemini."""
+    """Streaming generator for multi-turn chat using Groq."""
     try:
-        logger.info(f"Gemini stream: {len(messages)} messages")
-        model = genai.GenerativeModel(
-            MODEL,
-            system_instruction=system
-        )
+        logger.info(f"Groq stream: {len(messages)} messages")
 
-        # Convert message history for Gemini format
-        history = []
-        for msg in messages[:-1]:
-            role = "user" if msg["role"] == "user" else "model"
-            history.append({"role": role, "parts": [msg["content"]]})
+        groq_messages = [{"role": "system", "content": system}]
+        for msg in messages:
+            groq_messages.append({
+                "role": msg["role"],
+                "content": msg["content"],
+            })
 
-        chat = model.start_chat(history=history)
-
-        last_msg = messages[-1]["content"] if messages else ""
-
-        response = chat.send_message(
-            last_msg,
+        stream = client.chat.completions.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            temperature=0.7,
+            messages=groq_messages,
             stream=True,
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.7,
-            ),
         )
 
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
-        logger.info("Gemini stream completed")
+        logger.info("Groq stream completed")
     except Exception as e:
-        logger.error(f"Gemini stream error: {e}", exc_info=True)
+        logger.error(f"Groq stream error: {e}", exc_info=True)
         yield f"\n\n❌ Error: {e}"
 
 
@@ -534,21 +518,17 @@ def check_and_log_feature(feature: str) -> Tuple[bool, str]:
     user_id = st.session_state.get("user_id")
     if not user_id:
         return True, ""
-
     allowed, message, _ = check_usage_limit(user_id, feature)
     if not allowed:
         st.error(message)
         return False, message
-
     if message:
         st.warning(message)
-
     return True, message
 
 
 def generate_quiz(topic, subject):
     """Generate and validate a quiz MC question."""
-    logger.info(f"Generating quiz for {subject}: {topic}")
     text = call_claude(
         QUIZ_SYSTEM.format(subject=subject, topic=topic),
         f"Generate a DSE-level question about: {topic}",
@@ -557,13 +537,11 @@ def generate_quiz(topic, subject):
     data = parse_json(text) if text else None
     if data and validate_mc(data):
         return data
-    logger.warning("Quiz generation failed validation")
     return None
 
 
 def generate_pp_mc(topic, subject):
     """Generate and validate a past-paper MC question."""
-    logger.info(f"Generating past paper MC for {subject}: {topic}")
     text = call_claude(
         PAST_PAPER_MC_SYSTEM.format(subject=subject, topic=topic),
         f"Generate a DSE past paper MC about: {topic}",
@@ -572,13 +550,11 @@ def generate_pp_mc(topic, subject):
     data = parse_json(text) if text else None
     if data and validate_mc(data):
         return data
-    logger.warning("Past paper MC generation failed validation")
     return None
 
 
 def generate_pp_long(topic, subject):
     """Generate a structured (long) question."""
-    logger.info(f"Generating long question for {subject}: {topic}")
     return call_claude(
         PAST_PAPER_LONG_SYSTEM.format(subject=subject, topic=topic),
         f"Generate a DSE structured question about: {topic}",
@@ -588,7 +564,6 @@ def generate_pp_long(topic, subject):
 
 def generate_marking(question_text, subject):
     """Generate a marking scheme for a question."""
-    logger.info(f"Generating marking scheme for {subject}")
     return call_claude(
         MARKING_SYSTEM.format(subject=subject, question=question_text),
         "Provide the full marking scheme for this question.",
@@ -599,7 +574,6 @@ def generate_marking(question_text, subject):
 def generate_plan(subjects_taken, exam_date, hours, weak, extra):
     """Generate a personalised study plan."""
     days_left = max((exam_date - datetime.now().date()).days, 1)
-    logger.info(f"Generating study plan: {days_left} days, {hours}h/day")
     prompt = (
         f"Student Profile:\n"
         f"- Subjects: {subjects_taken}\n"
@@ -743,7 +717,7 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**Built for DSE students** 💪")
-    st.caption("Powered by Gemini AI • v2.1")
+    st.caption("Powered by Groq AI • v2.1")
 
 
 # ╔════════════════════════════════════════════════════════════════╗
@@ -753,7 +727,6 @@ with st.sidebar:
 if st.session_state.get("show_pricing"):
     st.markdown("# 💰 Upgrade to Premium")
     render_pricing_table()
-
     if st.button("← Back to App"):
         st.session_state.show_pricing = False
         st.rerun()
@@ -1264,5 +1237,5 @@ st.markdown("")
 st.divider()
 st.caption(
     "🏛️ **Athena AI** v2.1 — Built for DSE students, "
-    "by a DSE student. &nbsp;|&nbsp; Powered by Gemini AI"
+    "by a DSE student. &nbsp;|&nbsp; Powered by Groq AI"
 )
