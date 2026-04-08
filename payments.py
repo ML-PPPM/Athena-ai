@@ -3,7 +3,7 @@ import logging
 import stripe
 import streamlit as st
 from datetime import datetime
-from config import settings
+from config import settings, PRICING
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -70,14 +70,10 @@ def handle_payment_success(subscription_id: str, user_id: str):
 
 
 def render_pricing_table():
-    """Render pricing page with Stripe subscription options."""
+    """Render pricing page with payment options."""
 
     st.markdown("## 💰 Choose Your Plan")
     st.markdown("")
-
-    if not settings.STRIPE_PUBLIC_KEY:
-        st.error("Payment system is not configured. Please contact support.")
-        return
 
     # ── Free vs Premium comparison ──
     col1, col2, col3 = st.columns(3)
@@ -101,7 +97,7 @@ def render_pricing_table():
     with col2:
         st.markdown(
             f"""
-            ### 👑 Monthly — ${settings.PRICING['monthly_usd']}/mo
+            ### 👑 Monthly — ${PRICING['monthly_usd']}/mo
 
             - ✅ **Unlimited** quizzes
             - ✅ **Unlimited** study plans
@@ -117,7 +113,7 @@ def render_pricing_table():
     with col3:
         st.markdown(
             f"""
-            ### 🎓 Semester — ${settings.PRICING['semester_usd']}/5mo
+            ### 🎓 Semester — ${PRICING['semester_usd']}/5mo
 
             - ✅ **Unlimited** everything
             - ✅ **Save 20%** vs monthly
@@ -136,56 +132,97 @@ def render_pricing_table():
         st.markdown("---")
         st.markdown(f"## 🛒 Checkout — {plan.title()} Plan")
 
-        # Price IDs (you'll need to create these in Stripe dashboard)
-        price_ids = {
-            "monthly": "price_monthly_premium",  # Replace with actual Stripe price ID
-            "semester": "price_semester_premium",  # Replace with actual Stripe price ID
-        }
+        if settings.STRIPE_PUBLIC_KEY:
+            # Stripe payment flow
+            price_ids = {
+                "monthly": "price_monthly_premium",  # Replace with actual Stripe price ID
+                "semester": "price_semester_premium",  # Replace with actual Stripe price ID
+            }
 
-        if plan in price_ids:
-            user_email = st.session_state.get("user_email", "")
-            if user_email:
-                result = create_subscription(user_email, price_ids[plan])
+            if plan in price_ids:
+                user_email = st.session_state.get("user_email", "")
+                if user_email:
+                    result = create_subscription(user_email, price_ids[plan])
 
-                if "error" in result:
-                    st.error(f"Failed to create subscription: {result['error']}")
-                else:
-                    st.success("Subscription created! Complete payment below.")
+                    if "error" in result:
+                        st.error(f"Failed to create subscription: {result['error']}")
+                    else:
+                        st.success("Subscription created! Complete payment below.")
 
-                    # Stripe Elements checkout
-                    st.markdown(
-                        f"""
-                        <script src="https://js.stripe.com/v3/"></script>
-                        <div id="payment-element"></div>
-                        <button id="submit">Complete Payment</button>
+                        # Stripe Elements checkout
+                        st.markdown(
+                            f"""
+                            <script src="https://js.stripe.com/v3/"></script>
+                            <div id="payment-element"></div>
+                            <button id="submit">Complete Payment</button>
 
-                        <script>
-                        const stripe = Stripe('{settings.STRIPE_PUBLIC_KEY}');
-                        const elements = stripe.elements();
-                        const paymentElement = elements.create('payment');
-                        paymentElement.mount('#payment-element');
+                            <script>
+                            const stripe = Stripe('{settings.STRIPE_PUBLIC_KEY}');
+                            const elements = stripe.elements();
+                            const paymentElement = elements.create('payment');
+                            paymentElement.mount('#payment-element');
 
-                        const submitButton = document.getElementById('submit');
-                        submitButton.addEventListener('click', async (event) => {{
-                            event.preventDefault();
-                            const {{error}} = await stripe.confirmPayment({{
-                                elements,
-                                confirmParams: {{
-                                    return_url: window.location.href,
-                                }},
+                            const submitButton = document.getElementById('submit');
+                            submitButton.addEventListener('click', async (event) => {{
+                                event.preventDefault();
+                                const {{error}} = await stripe.confirmPayment({{
+                                    elements,
+                                    confirmParams: {{
+                                        return_url: window.location.href,
+                                    }},
+                                }});
+                                if (error) {{
+                                    alert(error.message);
+                                }}
                             }});
-                            if (error) {{
-                                alert(error.message);
-                            }}
-                        }});
-                        </script>
-                        """,
-                        unsafe_allow_html=True
-                    )
+                            </script>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                else:
+                    st.error("Please sign in to subscribe.")
             else:
-                st.error("Please sign in to subscribe.")
+                st.error("Invalid plan selected.")
         else:
-            st.error("Invalid plan selected.")
+            # Manual payment with QR codes
+            st.info("💡 **Manual Payment** - Scan QR code below to complete your purchase")
+
+            # Display pricing
+            prices = {
+                "monthly": PRICING['monthly_usd'],
+                "semester": PRICING['semester_usd']
+            }
+
+            st.markdown(f"**Price: ${prices[plan]}**")
+
+            # Payment instructions
+            st.markdown("""
+            ### 📱 Payment Instructions:
+            1. **Scan the QR code** below with your preferred payment app
+            2. **Complete the payment** for the exact amount
+            3. **Take a screenshot** of the payment confirmation
+            4. **Send the screenshot** to our WhatsApp: [YOUR NUMBER]
+            5. **We'll upgrade your account** within 24 hours
+            """)
+
+            # Display QR codes
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("### 💙 PayMe")
+                try:
+                    st.image("payme_qr.png", width=200)
+                except:
+                    st.error("PayMe QR code not found")
+
+            with col2:
+                st.markdown("### 💚 Alipay HK")
+                try:
+                    st.image("alipay_qr.png", width=200)
+                except:
+                    st.error("Alipay QR code not found")
+
+            st.success("📞 **Need help?** WhatsApp us at [YOUR NUMBER] for instant support!")
 
         if st.button("Cancel", use_container_width=True):
             del st.session_state.show_checkout
