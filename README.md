@@ -1,6 +1,6 @@
 # 🏛️ Athena AI — Complete DSE Teacher
 
-A **Streamlit-powered AI tutor** for Hong Kong DSE students, powered by Claude AI.
+A **Streamlit-powered AI tutor** for Hong Kong DSE students, powered by OpenRouter AI.
 
 ## ✨ Features
 
@@ -14,7 +14,7 @@ A **Streamlit-powered AI tutor** for Hong Kong DSE students, powered by Claude A
 ### Prerequisites
 - Python 3.9+
 - Streamlit
-- Anthropic API key (Claude AI)
+- OpenRouter API key
 
 ### Installation
 
@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 # Configure API key
 mkdir -p .streamlit
-echo 'ANTHROPIC_API_KEY = "your-key-here"' > .streamlit/secrets.toml
+echo 'OPENROUTER_API_KEY = "sk-or-v1-..."' > .streamlit/secrets.toml
 
 # Run the app
 streamlit run streamlit_app.py
@@ -47,14 +47,14 @@ The app will open in your browser at `http://localhost:8501`
 You can override the default model by setting:
 
 ```bash
-export ATHENA_MODEL="claude-opus-4-1-20250805"
+export OPENROUTER_MODEL="meta-llama/llama-3.3-70b-instruct"
 ```
 
 Or add to `.streamlit/secrets.toml`:
 
 ```toml
-ANTHROPIC_API_KEY = "sk-ant-..."
-ATHENA_MODEL = "claude-opus-4-1-20250805"
+OPENROUTER_API_KEY = "sk-or-v1-..."
+OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct"
 ```
 
 ## 🎓 Supported Subjects
@@ -80,7 +80,7 @@ README.md            # Documentation
 ### Core Components
 
 1. **Session Management** — Streamlit session state for multi-turn interactions
-2. **API Client** — Cached Anthropic client for efficiency
+2. **API Client** — Cached OpenRouter client for efficiency
 3. **Quiz Engine** — JSON parsing & validation for MC questions
 4. **Study Planner** — Personalized study schedules based on user input
 
@@ -186,5 +186,4 @@ For issues or questions:
 
 **Built for DSE students, by a DSE student.** 💪
 
-Powered by Claude AI • v2.1
-
+Powered by OpenRouter AI • v2.1
