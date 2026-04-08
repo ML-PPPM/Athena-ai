@@ -4,8 +4,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "meta-llama/llama-3.3-70b-instruct"
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
     STRIPE_PUBLIC_KEY: str = ""
@@ -28,8 +28,8 @@ def _get_streamlit_secret(key, default=""):
 
 
 settings = Settings(
-    GROQ_API_KEY=os.getenv("GROQ_API_KEY", "") or _get_streamlit_secret("GROQ_API_KEY"),
-    GROQ_MODEL=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+    OPENROUTER_API_KEY=os.getenv("OPENROUTER_API_KEY", "") or _get_streamlit_secret("OPENROUTER_API_KEY"),
+    OPENROUTER_MODEL=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),
     SUPABASE_URL=os.getenv("SUPABASE_URL", "") or _get_streamlit_secret("SUPABASE_URL"),
     SUPABASE_KEY=os.getenv("SUPABASE_KEY", "") or _get_streamlit_secret("SUPABASE_KEY"),
     STRIPE_PUBLIC_KEY=os.getenv("STRIPE_PUBLIC_KEY", "") or _get_streamlit_secret("STRIPE_PUBLIC_KEY"),
