@@ -1,5 +1,5 @@
 import streamlit as st
-from groq import Groq
+from openai import OpenAI
 import json
 import re
 import logging
@@ -44,7 +44,7 @@ if not st.session_state.get("is_authenticated"):
 # USER AUTHENTICATED - CONTINUE WITH APP
 # ═══════════════════════════════════════════════════════════════════
 
-MODEL = settings.GROQ_MODEL
+MODEL = settings.OPENROUTER_MODEL
 MAX_CHAT_HISTORY_LIMIT = MAX_CHAT_HISTORY
 
 
@@ -360,26 +360,29 @@ RULES:
 
 
 # ╔════════════════════════════════════════════════════════════════╗
-# ║                       API CLIENT (GROQ)                        ║
+# ║                     API CLIENT (OPENROUTER)                    ║
 # ╚════════════════════════════════════════════════════════════════╝
 
 @st.cache_resource
 def get_client():
-    """Initialize and cache the Groq client."""
+    """Initialize and cache the OpenRouter client."""
     try:
-        api_key = st.secrets.get("GROQ_API_KEY", "") or settings.GROQ_API_KEY
+        api_key = st.secrets.get("OPENROUTER_API_KEY", "") or settings.OPENROUTER_API_KEY
         if not api_key:
-            st.error("⚠️ `GROQ_API_KEY` not found in Streamlit secrets.")
+            st.error("⚠️ `OPENROUTER_API_KEY` not found in Streamlit secrets.")
             st.info(
                 "Add it to Streamlit secrets:\n"
-                '```\nGROQ_API_KEY = "gsk_..."\n```'
+                '```\nOPENROUTER_API_KEY = "sk-or-v1-..."\n```'
             )
             st.stop()
-        c = Groq(api_key=api_key)
-        logger.info("Groq client initialized successfully")
+        c = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+        logger.info("OpenRouter client initialized successfully")
         return c
     except Exception as e:
-        st.error(f"⚠️ Failed to initialize Groq: {e}")
+        st.error(f"⚠️ Failed to initialize OpenRouter: {e}")
         st.stop()
 
 
@@ -460,9 +463,9 @@ def validate_mc(data):
 
 
 def call_claude(system, user_msg, max_tokens=DEFAULT_MAX_TOKENS):
-    """Single-turn Groq call with error handling."""
+    """Single-turn OpenRouter call with error handling."""
     try:
-        logger.info(f"Groq call: max_tokens={max_tokens}")
+        logger.info(f"OpenRouter call: max_tokens={max_tokens}")
         response = client.chat.completions.create(
             model=MODEL,
             max_tokens=max_tokens,
@@ -473,24 +476,24 @@ def call_claude(system, user_msg, max_tokens=DEFAULT_MAX_TOKENS):
             ],
         )
         if response and response.choices:
-            logger.info("Groq response successful")
+            logger.info("OpenRouter response successful")
             return response.choices[0].message.content
-        logger.warning("Groq returned empty response")
+        logger.warning("OpenRouter returned empty response")
         return None
     except Exception as e:
-        logger.error(f"Groq error: {e}", exc_info=True)
+        logger.error(f"OpenRouter error: {e}", exc_info=True)
         st.error(f"❌ AI Error: {e}")
         return None
 
 
 def call_claude_stream(system, messages, max_tokens=1500):
-    """Streaming generator for multi-turn chat using Groq."""
+    """Streaming generator for multi-turn chat using OpenRouter."""
     try:
-        logger.info(f"Groq stream: {len(messages)} messages")
+        logger.info(f"OpenRouter stream: {len(messages)} messages")
 
-        groq_messages = [{"role": "system", "content": system}]
+        openrouter_messages = [{"role": "system", "content": system}]
         for msg in messages:
-            groq_messages.append({
+            openrouter_messages.append({
                 "role": msg["role"],
                 "content": msg["content"],
             })
@@ -499,7 +502,7 @@ def call_claude_stream(system, messages, max_tokens=1500):
             model=MODEL,
             max_tokens=max_tokens,
             temperature=0.7,
-            messages=groq_messages,
+            messages=openrouter_messages,
             stream=True,
         )
 
@@ -507,9 +510,9 @@ def call_claude_stream(system, messages, max_tokens=1500):
             if chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
-        logger.info("Groq stream completed")
+        logger.info("OpenRouter stream completed")
     except Exception as e:
-        logger.error(f"Groq stream error: {e}", exc_info=True)
+        logger.error(f"OpenRouter stream error: {e}", exc_info=True)
         yield f"\n\n❌ Error: {e}"
 
 
@@ -717,7 +720,7 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**Built for DSE students** 💪")
-    st.caption("Powered by Groq AI • v2.1")
+    st.caption("Powered by OpenRouter AI • v2.1")
 
 
 # ╔════════════════════════════════════════════════════════════════╗
@@ -1237,5 +1240,5 @@ st.markdown("")
 st.divider()
 st.caption(
     "🏛️ **Athena AI** v2.1 — Built for DSE students, "
-    "by a DSE student. &nbsp;|&nbsp; Powered by Groq AI"
+    "by a DSE student. &nbsp;|&nbsp; Powered by OpenRouter AI"
 )
