@@ -6,6 +6,7 @@ from typing import Optional, Tuple, Dict
 from datetime import datetime
 
 from database import db
+from supabase import create_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,11 @@ def render_auth_page():
     st.markdown("# 🔐 Welcome to Athena AI")
     st.caption("Sign in to unlock personalized learning, streak tracking, and more!")
 
-    tab1, tab2, tab3 = st.tabs(["🚀 Sign Up", "📝 Sign In", "👤 Demo Mode"])
+    if not db.is_connected():
+        st.error("Authentication service is not configured. Please contact support.")
+        return
+
+    tab1, tab2 = st.tabs(["🚀 Sign Up", "📝 Sign In"])
 
     # ─────────────────────────────────────────────────────────────
     # SIGN UP TAB
@@ -51,8 +56,27 @@ def render_auth_page():
             elif password != password_confirm:
                 st.error("Passwords don't match")
             else:
-                st.info("✅ Feature coming soon! For now, use Demo Mode to explore.")
-                logger.info(f"Signup attempt: {email}")
+                try:
+                    # Attempt to sign up with Supabase
+                    response = db.client.auth.sign_up({
+                        "email": email,
+                        "password": password,
+                        "options": {
+                            "data": {
+                                "full_name": full_name
+                            }
+                        }
+                    })
+                    if response.user:
+                        # Create user in database
+                        db.create_user(response.user.id, email, full_name, False)
+                        st.success("Account created successfully! Please check your email to verify your account.")
+                        logger.info(f"Signup successful: {email}")
+                    else:
+                        st.error("Failed to create account. Please try again.")
+                except Exception as e:
+                    st.error(f"Signup failed: {str(e)}")
+                    logger.error(f"Signup error: {e}")
 
     # ─────────────────────────────────────────────────────────────
     # SIGN IN TAB
@@ -66,38 +90,34 @@ def render_auth_page():
             if not email or not password:
                 st.error("Email and password are required")
             else:
-                st.info("✅ Feature coming soon! For now, use Demo Mode to explore.")
-                logger.info(f"Signin attempt: {email}")
+                try:
+                    # Attempt to sign in with Supabase
+                    response = db.client.auth.sign_in_with_password({
+                        "email": email,
+                        "password": password
+                    })
+                    if response.user:
+                        # Get user data
+                        user_data = db.get_user(response.user.id)
+                        if user_data:
+                            # Check subscription status and update if needed
+                            check_and_update_premium_status(response.user.id, user_data)
 
-    # ─────────────────────────────────────────────────────────────
-    # DEMO MODE TAB
-    # ─────────────────────────────────────────────────────────────
-    with tab3:
-        st.markdown("### Try Demo Mode")
-        st.info(
-            "✨ **No signup required!**\n\n"
-            "Explore all features with limited daily usage:\n"
-            "- 5 quizzes/day\n"
-            "- 2 study plans/day\n"
-            "- 3 past papers/day\n\n"
-            "Sign up to unlock unlimited access!"
-        )
-
-        demo_name = st.text_input(
-            "👤 Your name (optional)",
-            value="Demo User",
-            key="demo_name",
-        )
-
-        if st.button("👤 Enter as Guest", use_container_width=True, type="primary"):
-            st.session_state.user_id = f"demo_{datetime.now().timestamp()}"
-            st.session_state.user_email = "demo@athena.ai"
-            st.session_state.is_authenticated = True
-            st.session_state.is_premium = False
-            st.session_state.auth_method = "demo"
-            logger.info(f"Demo login: {demo_name}")
-            st.success(f"👋 Welcome, {demo_name}!")
-            st.rerun()
+                            st.session_state.user_id = response.user.id
+                            st.session_state.user_email = response.user.email
+                            st.session_state.is_authenticated = True
+                            st.session_state.is_premium = user_data.get("is_premium", False)
+                            st.session_state.auth_method = "supabase"
+                            logger.info(f"Signin successful: {email}")
+                            st.success(f"Welcome back, {user_data.get('full_name', 'User')}!")
+                            st.rerun()
+                        else:
+                            st.error("User data not found. Please contact support.")
+                    else:
+                        st.error("Invalid email or password")
+                except Exception as e:
+                    st.error(f"Sign in failed: {str(e)}")
+                    logger.error(f"Signin error: {e}")
 
 
 def check_usage_limit(user_id: str, feature: str) -> Tuple[bool, str, Dict]:
@@ -155,23 +175,42 @@ def render_premium_badge():
         if st.session_state.get("is_premium"):
             st.markdown("### 👑 Premium User")
             st.success("Unlimited features!")
-        elif st.session_state.get("auth_method") == "demo":
-            st.markdown("### 👤 Guest User")
-            st.warning("Limited free tier")
+        else:
+            st.markdown("### 📋 Athena AI")
+            st.info("Free tier - upgrade for unlimited access")
             if st.button("⬆️ Upgrade to Premium", use_container_width=True):
                 st.session_state.show_pricing = True
                 st.rerun()
+
+
+def check_and_update_premium_status(user_id: str, user_data: Dict):
+    """Check subscription status and update premium status if needed."""
+    if not db.is_connected():
+        return
+
+    try:
+        # Check if user has active subscription
+        subscription = db.client.table('subscriptions').select('*').eq('user_id', user_id).eq('status', 'active').single().execute()
+
+        if subscription.data:
+            # Check if subscription is still valid
+            from datetime import datetime
+            renews_at = datetime.fromisoformat(subscription.data['renews_at'])
+            if datetime.now() < renews_at:
+                # Ensure user is marked as premium
+                if not user_data.get('is_premium'):
+                    db.update_user(user_id, {'is_premium': True})
+                    logger.info(f"Updated user {user_id} to premium based on active subscription")
+            else:
+                # Subscription expired, downgrade user
+                db.update_user(user_id, {'is_premium': False, 'premium_until': None})
+                db.client.table('subscriptions').update({'status': 'expired'}).eq('user_id', user_id).execute()
+                logger.info(f"Downgraded expired subscription for user {user_id}")
         else:
-            st.markdown("### 📋 Athena AI")
+            # No active subscription, ensure user is not premium
+            if user_data.get('is_premium'):
+                db.update_user(user_id, {'is_premium': False, 'premium_until': None})
+                logger.info(f"Removed premium status for user {user_id} - no active subscription")
 
-
-def logout():
-    """Logout current user."""
-    st.session_state.user_id = None
-    st.session_state.user_email = None
-    st.session_state.is_authenticated = False
-    st.session_state.is_premium = False
-    st.session_state.auth_method = None
-    logger.info("User logged out")
-    st.success("Logged out successfully!")
-    st.rerun()
+    except Exception as e:
+        logger.error(f"Error checking subscription status for {user_id}: {e}")

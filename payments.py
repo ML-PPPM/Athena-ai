@@ -1,253 +1,195 @@
-"""Payment integration using PayMe and Alipay with push notifications."""
+"""Payment integration using Stripe for automatic subscriptions."""
 import logging
-import urllib.request
+import stripe
 import streamlit as st
 from datetime import datetime
+from config import settings
+from database import db
 
 logger = logging.getLogger(__name__)
 
-# ── Change this to your own secret topic name ──
-NTFY_TOPIC = "athena-ai-payments-ml-pppm"
+# Initialize Stripe
+if settings.STRIPE_SECRET_KEY:
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+else:
+    logger.warning("Stripe secret key not configured")
 
 
-def notify_me(name, contact, method, email):
-    """Send free push notification when someone pays."""
+def create_subscription(user_email: str, price_id: str) -> dict:
+    """Create a Stripe subscription for the user."""
+    if not settings.STRIPE_SECRET_KEY:
+        return {"error": "Stripe not configured"}
+
     try:
-        data = (
-            f"💰 NEW PAYMENT!\n"
-            f"Name: {name}\n"
-            f"Contact: {contact}\n"
-            f"Method: {method}\n"
-            f"Email: {email}\n"
-            f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        # Create or retrieve customer
+        customers = stripe.Customer.list(email=user_email, limit=1)
+        if customers.data:
+            customer = customers.data[0]
+        else:
+            customer = stripe.Customer.create(email=user_email)
+
+        # Create subscription
+        subscription = stripe.Subscription.create(
+            customer=customer.id,
+            items=[{"price": price_id}],
+            payment_behavior="default_incomplete",
+            expand=["latest_invoice.payment_intent"],
         )
-        req = urllib.request.Request(
-            f"https://ntfy.sh/{NTFY_TOPIC}",
-            data=data.encode(),
-            headers={
-                "Title": "Athena AI — New Payment!",
-                "Priority": "high",
-                "Tags": "money_with_wings",
-            },
-            method="POST",
-        )
-        urllib.request.urlopen(req, timeout=5)
-        logger.info(f"Payment notification sent for {name}")
+
+        return {
+            "subscription_id": subscription.id,
+            "client_secret": subscription.latest_invoice.payment_intent.client_secret,
+            "customer_id": customer.id,
+        }
     except Exception as e:
-        logger.warning(f"Failed to send notification: {e}")
+        logger.error(f"Error creating subscription: {e}")
+        return {"error": str(e)}
+
+
+def handle_payment_success(subscription_id: str, user_id: str):
+    """Handle successful payment and upgrade user to premium."""
+    try:
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        price_id = subscription.items.data[0].price.id
+
+        # Determine plan type from price ID
+        plan_type = "monthly"  # Default
+        if "semester" in price_id.lower():
+            plan_type = "semester"
+        elif "dse" in price_id.lower() or "bundle" in price_id.lower():
+            plan_type = "dse_bundle"
+
+        # Create subscription record and upgrade user
+        db.create_subscription(user_id, subscription_id, plan_type)
+
+        logger.info(f"Successfully upgraded user {user_id} to premium with {plan_type} plan")
+        return True
+    except Exception as e:
+        logger.error(f"Error handling payment success: {e}")
+        return False
 
 
 def render_pricing_table():
-    """Render pricing page with PayMe/Alipay QR codes."""
+    """Render pricing page with Stripe subscription options."""
 
-    st.markdown("## 💰 Simple Pricing")
+    st.markdown("## 💰 Choose Your Plan")
     st.markdown("")
 
+    if not settings.STRIPE_PUBLIC_KEY:
+        st.error("Payment system is not configured. Please contact support.")
+        return
+
     # ── Free vs Premium comparison ──
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown(
             """
             ### 🆓 Free
-            
+
             - 5 quizzes/day
             - 2 study plans/day
             - 3 past papers/day
             - 10 learn sessions/day
             """
         )
-        st.button("Current Plan ✅", disabled=True, use_container_width=True)
+        if st.session_state.get("is_premium"):
+            st.button("Downgrade to Free", use_container_width=True, type="secondary")
+        else:
+            st.button("Current Plan ✅", disabled=True, use_container_width=True)
 
     with col2:
         st.markdown(
-            """
-            ### 👑 Premium — $68/月
-            
+            f"""
+            ### 👑 Monthly — ${settings.PRICING['monthly_usd']}/mo
+
             - ✅ **Unlimited** quizzes
             - ✅ **Unlimited** study plans
             - ✅ **Unlimited** past papers
             - ✅ **Unlimited** learning
             - ✅ Priority support
-            - ✅ Early access to new features
+            - ✅ Cancel anytime
             """
         )
+        if st.button("Subscribe Monthly", use_container_width=True, type="primary"):
+            st.session_state.show_checkout = "monthly"
 
-    st.divider()
-
-    # ── Price comparison ──
-    st.markdown("### 💡 Compare")
-    st.markdown(
-        """
-        | | Price | Available |
-        |---|---|---|
-        | Private Tutor 補習 | $200-500/hr | Few hours/week |
-        | Tutorial Center 補習社 | $800-2000/mo | Limited subjects |
-        | **Athena AI Premium** | **$68/mo** | **24/7, all 14 subjects** |
-        """
-    )
-
-    st.divider()
-
-    # ── Payment methods ──
-    st.markdown("## 📱 How to Pay 付款方法")
-    st.markdown("")
-
-    tab1, tab2, tab3 = st.tabs(["📱 PayMe", "📱 Alipay", "💵 Other"])
-
-    with tab1:
-        st.markdown("### Scan with PayMe")
-        st.markdown("**Amount 金額: HK$68**")
-        st.markdown("")
-        try:
-            st.image("payme_qr.png", width=250, caption="Scan to pay $68 via PayMe")
-        except Exception:
-            st.markdown(
-                """
-                📱 **PayMe Steps:**
-                1. Open PayMe app
-                2. Click "Send 付款"
-                3. Search phone number: **[YOUR PHONE NUMBER]**
-                4. Enter amount: **$68**
-                5. Send ✅
-                """
-            )
-
-    with tab2:
-        st.markdown("### Scan with Alipay HK")
-        st.markdown("**Amount 金額: HK$68**")
-        st.markdown("")
-        try:
-            st.image("alipay_qr.png", width=250, caption="Scan to pay $68 via Alipay")
-        except Exception:
-            st.markdown(
-                """
-                📱 **Alipay Steps:**
-                1. Open Alipay HK app
-                2. Click "Transfer 轉賬"
-                3. Search phone number: **[YOUR PHONE NUMBER]**
-                4. Enter amount: **$68**
-                5. Confirm ✅
-                """
-            )
-
-    with tab3:
-        st.markdown("### Other Payment Methods")
+    with col3:
         st.markdown(
+            f"""
+            ### 🎓 Semester — ${settings.PRICING['semester_usd']}/5mo
+
+            - ✅ **Unlimited** everything
+            - ✅ **Save 20%** vs monthly
+            - ✅ 5 months coverage
+            - ✅ Perfect for exam prep
+            - ✅ Priority support
             """
-            📱 **FPS 轉數快:** [YOUR PHONE NUMBER]
-            🏧 **Bank Transfer:** [YOUR BANK DETAILS — optional]
-            💵 **Cash:** Contact me on WhatsApp
-            
-            📞 **WhatsApp:** [YOUR WHATSAPP NUMBER]
-            """
         )
+        if st.button("Subscribe Semester", use_container_width=True, type="primary"):
+            st.session_state.show_checkout = "semester"
 
-    st.divider()
+    # ── Checkout Modal ──
+    if st.session_state.get("show_checkout"):
+        plan = st.session_state.show_checkout
 
-    # ── Payment confirmation form ──
-    st.markdown("## ✅ After Payment 付款後")
-    st.markdown("填寫以下資料，我會喺 **24 小時內** 開通你嘅 Premium 👑")
-    st.markdown("")
+        st.markdown("---")
+        st.markdown(f"## 🛒 Checkout — {plan.title()} Plan")
 
-    with st.form("payment_form"):
-        col_a, col_b = st.columns(2)
+        # Price IDs (you'll need to create these in Stripe dashboard)
+        price_ids = {
+            "monthly": "price_monthly_premium",  # Replace with actual Stripe price ID
+            "semester": "price_semester_premium",  # Replace with actual Stripe price ID
+        }
 
-        with col_a:
-            name = st.text_input(
-                "👤 Your Name 你的名字",
-                placeholder="e.g. Chan Siu Ming"
-            )
-        with col_b:
-            contact = st.text_input(
-                "📱 WhatsApp Number",
-                placeholder="e.g. 9123 4567"
-            )
+        if plan in price_ids:
+            user_email = st.session_state.get("user_email", "")
+            if user_email:
+                result = create_subscription(user_email, price_ids[plan])
 
-        col_c, col_d = st.columns(2)
+                if "error" in result:
+                    st.error(f"Failed to create subscription: {result['error']}")
+                else:
+                    st.success("Subscription created! Complete payment below.")
 
-        with col_c:
-            method = st.selectbox(
-                "💳 Payment Method 付款方式",
-                ["PayMe", "Alipay HK", "FPS 轉數快", "Bank Transfer", "Cash 現金"]
-            )
-        with col_d:
-            email = st.text_input(
-                "📧 Email (登入用)",
-                placeholder="your@email.com"
-            )
+                    # Stripe Elements checkout
+                    st.markdown(
+                        f"""
+                        <script src="https://js.stripe.com/v3/"></script>
+                        <div id="payment-element"></div>
+                        <button id="submit">Complete Payment</button>
 
-        amount = st.selectbox(
-            "💰 Plan 計劃",
-            [
-                "Monthly 月費 — HK$68/month",
-                "Semester 學期 — HK$298/5 months (Save $42!)",
-                "DSE Bundle 考試套餐 — HK$488 (until DSE exam)",
-            ]
-        )
+                        <script>
+                        const stripe = Stripe('{settings.STRIPE_PUBLIC_KEY}');
+                        const elements = stripe.elements();
+                        const paymentElement = elements.create('payment');
+                        paymentElement.mount('#payment-element');
 
-        notes = st.text_area(
-            "📝 Notes 備註 (optional)",
-            placeholder="e.g. transaction ID, payment time, anything else...",
-            height=80,
-        )
-
-        st.markdown("")
-        submitted = st.form_submit_button(
-            "✅ I've Paid — Activate My Premium!",
-            use_container_width=True,
-            type="primary",
-        )
-
-        if submitted:
-            if not name.strip():
-                st.error("⚠️ Please enter your name 請輸入你的名字")
-            elif not contact.strip():
-                st.error("⚠️ Please enter your WhatsApp number 請輸入你的WhatsApp號碼")
-            elif not email.strip():
-                st.error("⚠️ Please enter your email 請輸入你的電郵")
+                        const submitButton = document.getElementById('submit');
+                        submitButton.addEventListener('click', async (event) => {{
+                            event.preventDefault();
+                            const {{error}} = await stripe.confirmPayment({{
+                                elements,
+                                confirmParams: {{
+                                    return_url: window.location.href,
+                                }},
+                            }});
+                            if (error) {{
+                                alert(error.message);
+                            }}
+                        }});
+                        </script>
+                        """,
+                        unsafe_allow_html=True
+                    )
             else:
-                # Send push notification to you
-                notify_me(
-                    name.strip(),
-                    contact.strip(),
-                    f"{method} — {amount}",
-                    email.strip(),
-                )
+                st.error("Please sign in to subscribe.")
+        else:
+            st.error("Invalid plan selected.")
 
-                # Log it
-                logger.info(
-                    f"Premium request: {name}, {contact}, "
-                    f"{method}, {email}, {amount}"
-                )
-
-                st.success(
-                    f"🎉 **Payment Received!**\n\n"
-                    f"**Name:** {name}\n"
-                    f"**Contact:** {contact}\n"
-                    f"**Method:** {method}\n"
-                    f"**Plan:** {amount}\n\n"
-                    f"---\n"
-                    f"📱 我會喺 24 小時內 WhatsApp 你確認\n"
-                    f"Premium will be activated within 24 hours 👑\n\n"
-                    f"如有問題，WhatsApp 我: [YOUR NUMBER]"
-                )
-
-                st.balloons()
-
-    st.divider()
-
-    # ── FAQ ──
-    st.markdown("## ❓ FAQ")
-
-    with st.expander("點樣知道我已經升級？"):
-        st.markdown("我會 WhatsApp 你確認，之後你 refresh 個 app 就會見到 👑 Premium badge。")
-
-    with st.expander("可唔可以退款？"):
-        st.markdown("首 7 日內可以全額退款。之後唔設退款，但可以隨時取消下個月。")
-
-    with st.expander("點樣取消？"):
-        st.markdown("WhatsApp 我話想取消就得，下個月唔會再收費。")
+        if st.button("Cancel", use_container_width=True):
+            del st.session_state.show_checkout
+            st.rerun()
 
     with st.expander("我有其他問題"):
         st.markdown("WhatsApp 我: [YOUR NUMBER]，我會盡快回覆！")

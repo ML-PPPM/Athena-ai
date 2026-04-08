@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = ""
     STRIPE_PUBLIC_KEY: str = ""
     STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
 
@@ -58,6 +59,8 @@ PREMIUM_TIER = {
 PRICING = {
     "monthly_usd": 9.99,
     "monthly_hkd": 79,
-    "annual_usd": 99.99,
-    "annual_hkd": 779,
+    "semester_usd": 39.99,
+    "semester_hkd": 298,
+    "dse_bundle_usd": 49.99,
+    "dse_bundle_hkd": 388,
 }

@@ -40,7 +40,53 @@ streamlit run streamlit_app.py
 
 The app will open in your browser at `http://localhost:8501`
 
-## 📖 Configuration
+## � Stripe Setup (for Automatic Subscriptions)
+
+### 1. Create Stripe Account
+- Sign up at [stripe.com](https://stripe.com)
+- Complete account verification
+
+### 2. Create Products and Prices
+In your Stripe dashboard:
+
+1. Go to **Products** → **Create product**
+2. Create "Monthly Premium" with price $9.99/month
+3. Create "Semester Premium" with price $39.99 (set billing interval to custom)
+4. Note the **Price IDs** (start with `price_`)
+
+### 3. Configure Webhooks
+1. Go to **Developers** → **Webhooks**
+2. Add endpoint: `https://yourdomain.com/webhook`
+3. Select events:
+   - `invoice.payment_succeeded`
+   - `customer.subscription.deleted`
+   - `invoice.payment_failed`
+4. Copy the **Webhook signing secret**
+
+### 4. Environment Variables
+Add to your `.env` file:
+```bash
+STRIPE_PUBLIC_KEY=pk_live_...
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+### 5. Update Price IDs
+In `payments.py`, replace the placeholder price IDs with your actual Stripe price IDs:
+```python
+price_ids = {
+    "monthly": "price_YOUR_MONTHLY_PRICE_ID",
+    "semester": "price_YOUR_SEMESTER_PRICE_ID",
+}
+```
+
+### 6. Run Webhook Handler
+```bash
+python webhook.py
+```
+Deploy this to a server accessible from Stripe (Heroku, Railway, etc.)
+
+## �📖 Configuration
 
 ### Environment Variables
 

@@ -717,6 +717,12 @@ with st.sidebar:
         if st.button("👑 Upgrade to Premium", use_container_width=True, type="primary"):
             st.session_state.show_pricing = True
             st.rerun()
+    else:
+        # Subscription management for premium users
+        st.markdown("### 👑 Premium Account")
+        if st.button("📋 Manage Subscription", use_container_width=True):
+            st.session_state.show_subscription = True
+            st.rerun()
 
     st.divider()
     st.markdown("**Built for DSE students** 💪")
@@ -732,6 +738,43 @@ if st.session_state.get("show_pricing"):
     render_pricing_table()
     if st.button("← Back to App"):
         st.session_state.show_pricing = False
+        st.rerun()
+    st.stop()
+
+if st.session_state.get("show_subscription"):
+    st.markdown("# 👑 Manage Subscription")
+    
+    if not st.session_state.get("is_premium"):
+        st.error("You don't have an active premium subscription.")
+    else:
+        st.success("✅ You have an active premium subscription!")
+        
+        # Show subscription details
+        user_id = st.session_state.get("user_id")
+        if user_id and db.is_connected():
+            subscription = db.client.table('subscriptions').select('*').eq('user_id', user_id).eq('status', 'active').single().execute()
+            if subscription.data:
+                sub_data = subscription.data
+                st.markdown("### 📊 Subscription Details")
+                st.info(f"""
+                **Plan:** {sub_data.get('plan_type', 'Unknown').title()}
+                **Status:** {sub_data.get('status', 'Unknown').title()}
+                **Started:** {sub_data.get('started_at', 'Unknown')[:10]}
+                **Renews:** {sub_data.get('renews_at', 'Unknown')[:10]}
+                """)
+                
+                if st.button("❌ Cancel Subscription", use_container_width=True, type="secondary"):
+                    if db.cancel_subscription(user_id):
+                        st.success("Subscription cancelled. You'll retain premium access until the end of your billing period.")
+                        st.session_state.is_premium = False
+                        st.rerun()
+                    else:
+                        st.error("Failed to cancel subscription. Please contact support.")
+            else:
+                st.warning("Could not load subscription details.")
+    
+    if st.button("← Back to App"):
+        st.session_state.show_subscription = False
         st.rerun()
     st.stop()
 
