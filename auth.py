@@ -11,6 +11,19 @@ from supabase import create_client
 logger = logging.getLogger(__name__)
 
 
+def get_response_user(response):
+    """Normalize Supabase auth response user object."""
+    if response is None:
+        return None
+    if hasattr(response, "user"):
+        return response.user
+    if isinstance(response, dict):
+        return response.get("user")
+    if hasattr(response, "get"):
+        return response.get("user")
+    return None
+
+
 def init_auth_session():
     """Initialize authentication session state."""
     auth_defaults = {
@@ -78,11 +91,16 @@ def render_auth_page():
                                         }
                                     }
                                 })
-                                if response.user:
+                                signup_user = get_response_user(response)
+                                if signup_user:
                                     # Create user in database and mark as verified
-                                    db.create_user(response.user.id, st.session_state.verification_email,
-                                                 st.session_state.get("verification_name", ""), False)
-                                    db.mark_email_verified(response.user.id)
+                                    db.create_user(
+                                        signup_user.id,
+                                        st.session_state.verification_email,
+                                        st.session_state.get("verification_name", ""),
+                                        False,
+                                    )
+                                    db.mark_email_verified(signup_user.id)
 
                                     st.success("Account created and verified successfully! Welcome to Athena AI!")
                                     logger.info(f"Signup completed: {st.session_state.verification_email}")
@@ -162,8 +180,9 @@ def render_auth_page():
                                     }
                                 }
                             })
-                            if response.user:
-                                db.create_user(response.user.id, email, full_name, False)
+                            signup_user = get_response_user(response)
+                            if signup_user:
+                                db.create_user(signup_user.id, email, full_name, False)
                                 st.success("Account created successfully! Please check your email to verify your account.")
                                 logger.info(f"Signup successful: {email}")
                             else:
@@ -192,9 +211,10 @@ def render_auth_page():
                         "email": email,
                         "password": password
                     })
-                    if response.user:
+                    signin_user = get_response_user(response)
+                    if signin_user:
                         # Get user data
-                        user_data = db.get_user(response.user.id)
+                        user_data = db.get_user(signin_user.id)
                         if user_data:
                             # Check if email verification is required
                             from email_verification import email_verifier
@@ -204,10 +224,10 @@ def render_auth_page():
                                 logger.warning(f"Unverified user attempted signin: {email}")
                             else:
                                 # Check subscription status and update if needed
-                                check_and_update_premium_status(response.user.id, user_data)
+                                check_and_update_premium_status(signin_user.id, user_data)
 
-                                st.session_state.user_id = response.user.id
-                                st.session_state.user_email = response.user.email
+                                st.session_state.user_id = signin_user.id
+                                st.session_state.user_email = signin_user.email
                                 st.session_state.is_authenticated = True
                                 st.session_state.is_premium = user_data.get("is_premium", False)
                                 st.session_state.auth_method = "supabase"
@@ -320,9 +340,9 @@ def render_premium_badge():
                 st.rerun()
 
 
-def check_and_update_premium_status(user_id: str, user_Dict):
+def check_and_update_premium_status(user_id: str, user_data):
     """Check subscription status and update premium status if needed."""
-    if not db.is_connected():
+    if not db.is_connected() or not user_data:
         return
 
     try:
