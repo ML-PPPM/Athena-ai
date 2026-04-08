@@ -320,7 +320,7 @@ def render_premium_badge():
                 st.rerun()
 
 
-def check_and_update_premium_status(user_id: str, user_data: Dict):
+def check_and_update_premium_status(user_id: str, user_Dict):
     """Check subscription status and update premium status if needed."""
     if not db.is_connected():
         return
