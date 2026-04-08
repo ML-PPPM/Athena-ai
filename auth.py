@@ -30,11 +30,19 @@ def render_auth_page():
     st.markdown("# 🔐 Welcome to Athena AI")
     st.caption("Sign in to unlock personalized learning, streak tracking, and more!")
 
-    if not db.is_connected():
-        st.error("Authentication service is not configured. Please contact support.")
-        return
+    # Check if Supabase is configured
+    supabase_configured = db.is_connected()
 
-    tab1, tab2 = st.tabs(["🚀 Sign Up", "📝 Sign In"])
+    if not supabase_configured:
+        st.warning("⚠️ **Supabase not configured** - Authentication will not work. Use Development Mode below.")
+        st.info("""
+        **To enable authentication:**
+        1. Set up Supabase at [supabase.com](https://supabase.com)
+        2. Configure `SUPABASE_URL` and `SUPABASE_KEY` in your `.env` file
+        3. Restart the app
+        """)
+
+    tab1, tab2, tab3 = st.tabs(["🚀 Sign Up", "📝 Sign In", "🚧 Development Mode"])
 
     # ─────────────────────────────────────────────────────────────
     # SIGN UP TAB
@@ -48,8 +56,10 @@ def render_auth_page():
         )
         full_name = st.text_input("👤 Full Name (optional)", key="signup_name")
 
-        if st.button("🚀 Create Account", use_container_width=True, type="primary"):
-            if not email or not password:
+        if st.button("🚀 Create Account", use_container_width=True, type="primary", disabled=not supabase_configured):
+            if not supabase_configured:
+                st.error("Supabase not configured. Use Development Mode instead.")
+            elif not email or not password:
                 st.error("Email and password are required")
             elif len(password) < 8:
                 st.error("Password must be at least 8 characters")
@@ -86,8 +96,10 @@ def render_auth_page():
         email = st.text_input("📧 Email", key="signin_email")
         password = st.text_input("🔐 Password", type="password", key="signin_password")
 
-        if st.button("📝 Sign In", use_container_width=True, type="primary"):
-            if not email or not password:
+        if st.button("📝 Sign In", use_container_width=True, type="primary", disabled=not supabase_configured):
+            if not supabase_configured:
+                st.error("Supabase not configured. Use Development Mode instead.")
+            elif not email or not password:
                 st.error("Email and password are required")
             else:
                 try:
@@ -118,6 +130,37 @@ def render_auth_page():
                 except Exception as e:
                     st.error(f"Sign in failed: {str(e)}")
                     logger.error(f"Signin error: {e}")
+
+    # ─────────────────────────────────────────────────────────────
+    # DEVELOPMENT MODE TAB
+    # ─────────────────────────────────────────────────────────────
+    with tab3:
+        st.markdown("### Development Mode")
+        st.info(
+            "✨ **No setup required!**\n\n"
+            "Explore all features with premium access:\n"
+            "- ✅ Unlimited quizzes\n"
+            "- ✅ Unlimited study plans\n"
+            "- ✅ Unlimited past papers\n"
+            "- ✅ All learning features\n\n"
+            "Perfect for testing and development!"
+        )
+
+        demo_name = st.text_input(
+            "👤 Your name (optional)",
+            value="Developer",
+            key="dev_name",
+        )
+
+        if st.button("🚧 Enter Development Mode", use_container_width=True, type="primary"):
+            st.session_state.user_id = f"dev_{demo_name.lower().replace(' ', '_')}"
+            st.session_state.user_email = f"{demo_name.lower().replace(' ', '.')}@dev.local"
+            st.session_state.is_authenticated = True
+            st.session_state.is_premium = True
+            st.session_state.auth_method = "development"
+            logger.info(f"Development login: {demo_name}")
+            st.success(f"🚧 Welcome to Development Mode, {demo_name}!")
+            st.rerun()
 
 
 def check_usage_limit(user_id: str, feature: str) -> Tuple[bool, str, Dict]:
@@ -172,7 +215,10 @@ def check_usage_limit(user_id: str, feature: str) -> Tuple[bool, str, Dict]:
 def render_premium_badge():
     """Render user badge in sidebar."""
     if st.session_state.get("is_authenticated"):
-        if st.session_state.get("is_premium"):
+        if st.session_state.get("auth_method") == "development":
+            st.markdown("### 🚧 Development Mode")
+            st.info("Full access for testing")
+        elif st.session_state.get("is_premium"):
             st.markdown("### 👑 Premium User")
             st.success("Unlimited features!")
         else:
@@ -189,13 +235,14 @@ def check_and_update_premium_status(user_id: str, user_data: Dict):
         return
 
     try:
-        # Check if user has active subscription
-        subscription = db.client.table('subscriptions').select('*').eq('user_id', user_id).eq('status', 'active').single().execute()
+        # Check if user has active subscription (don't use .single() as it expects exactly 1 row)
+        subscriptions = db.client.table('subscriptions').select('*').eq('user_id', user_id).eq('status', 'active').execute()
 
-        if subscription.data:
+        if subscriptions.data and len(subscriptions.data) > 0:
+            subscription = subscriptions.data[0]  # Get the first active subscription
             # Check if subscription is still valid
             from datetime import datetime
-            renews_at = datetime.fromisoformat(subscription.data['renews_at'])
+            renews_at = datetime.fromisoformat(subscription['renews_at'])
             if datetime.now() < renews_at:
                 # Ensure user is marked as premium
                 if not user_data.get('is_premium'):
@@ -214,3 +261,15 @@ def check_and_update_premium_status(user_id: str, user_data: Dict):
 
     except Exception as e:
         logger.error(f"Error checking subscription status for {user_id}: {e}")
+
+
+def logout():
+    """Logout current user."""
+    st.session_state.user_id = None
+    st.session_state.user_email = None
+    st.session_state.is_authenticated = False
+    st.session_state.is_premium = False
+    st.session_state.auth_method = None
+    logger.info("User logged out")
+    st.success("Logged out successfully!")
+    st.rerun()

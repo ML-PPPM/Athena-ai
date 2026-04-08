@@ -30,6 +30,20 @@ class Database:
         """Check if database is connected."""
         return self.client is not None
 
+    def refresh_connection(self):
+        """Refresh database connection and schema cache."""
+        if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
+            logger.warning("Supabase credentials not configured")
+            self.client = None
+        else:
+            try:
+                # Create a new client to refresh schema cache
+                self.client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+                logger.info("Database connection refreshed")
+            except Exception as e:
+                logger.error(f"Failed to refresh database connection: {e}")
+                self.client = None
+
     # ─────────────────────────────────────────────────────────────
     # USER OPERATIONS
     # ─────────────────────────────────────────────────────────────

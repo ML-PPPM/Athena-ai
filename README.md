@@ -30,13 +30,28 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure API key
-mkdir -p .streamlit
-echo 'OPENROUTER_API_KEY = "sk-or-v1-..."' > .streamlit/secrets.toml
+# Run setup script to configure API keys
+python setup.py
 
 # Run the app
 streamlit run streamlit_app.py
 ```
+
+### Quick Development Setup
+
+If you just want to test the UI without setting up Supabase:
+
+1. Run the app: `streamlit run streamlit_app.py`
+2. Click "🚧 Enter Development Mode" on the auth page
+3. This gives you full access with premium features for testing
+
+### Full Setup (Required for Production)
+
+The setup script will guide you through configuring:
+
+- **Supabase**: For user authentication and database
+- **OpenRouter**: For AI chat functionality  
+- **Stripe**: For payment processing (optional)
 
 The app will open in your browser at `http://localhost:8501`
 

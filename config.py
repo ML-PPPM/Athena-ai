@@ -1,6 +1,10 @@
 """Configuration and constants for Athena AI."""
 import os
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -47,6 +51,13 @@ FREE_TIER = {
     "daily_plans": 2,
     "daily_past_papers": 3,
     "daily_learn_sessions": 10,
+}
+
+PREMIUM_TIER = {
+    "daily_quizzes": 100,
+    "daily_plans": 20,
+    "daily_past_papers": 50,
+    "daily_learn_sessions": 999,
 }
 
 PREMIUM_TIER = {

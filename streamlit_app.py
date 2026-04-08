@@ -52,51 +52,11 @@ MAX_CHAT_HISTORY_LIMIT = MAX_CHAT_HISTORY
 # ║                          STYLING                               ║
 # ╚════════════════════════════════════════════════════════════════╝
 
-st.markdown("""
-<style>
-    .block-container { max-width: 800px; padding-top: 2rem; }
-
-    h1 {
-        background: linear-gradient(135deg, #6C63FF 0%, #48C6EF 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700 !important;
-    }
-
-    .stButton > button {
-        border-radius: 12px;
-        font-size: 14px;
-        font-weight: 500;
-        padding: 10px 20px;
-        transition: all 0.25s ease;
-        border: 1px solid rgba(108, 99, 255, 0.15);
-    }
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(108, 99, 255, 0.2);
-    }
-    .stButton > button:active { transform: translateY(0); }
-
-    .stChatMessage { border-radius: 16px; }
-    .stAlert { border-radius: 12px; }
-    hr { border-color: rgba(108, 99, 255, 0.1); }
-    [data-testid="stMetricValue"] { font-size: 1.8rem; color: #6C63FF; }
-
-    .stForm {
-        border: 1px solid rgba(108, 99, 255, 0.12);
-        border-radius: 16px;
-        padding: 20px;
-    }
-
-    @keyframes fireGlow {
-        0%, 100% { text-shadow: 0 0 4px #ff6b35; }
-        50%      { text-shadow: 0 0 16px #ff6b35, 0 0 24px #ffa07a; }
-    }
-    .streak-fire { animation: fireGlow 1.5s infinite; font-size: 1.15rem; }
-
-    #MainMenu, footer, header { visibility: hidden; }
-</style>
-""", unsafe_allow_html=True)
+# st.markdown("""
+# <style>
+#     .block-container { max-width: 800px; padding-top: 2rem; }
+# </style>
+# """, unsafe_allow_html=True)
 
 
 # ╔════════════════════════════════════════════════════════════════╗
@@ -161,26 +121,26 @@ Subject: {subject}
 
 When a student asks about ANY topic, respond with this SMART SUMMARY:
 
-🎯 **Core Concept**
+**Core Concept**
 [1–2 sentences. Explain like talking to a smart friend. SIMPLE.]
 
-🔑 **Key Points**
+**Key Points**
 1. **[Point]** — [real-life example or analogy]
 2. **[Point]** — [example]
 3. **[Point]** — [example]
 (add 4–6 if truly needed)
 
-📊 **Key Formulas / Rules**
+**Key Formulas / Rules**
 [Relevant formulas, equations, grammar rules, or key terms]
 [Skip this section entirely if not applicable]
 
-📝 **DSE Exam Tip**
+**DSE Exam Tip**
 [One SPECIFIC tip for scoring marks on this topic in the real DSE exam]
 
-🧠 **Memory Trick**
+**Memory Trick**
 [A mnemonic, analogy, visual image, or story to lock this in memory]
 
-🔗 **Also Study:** [related topic 1] → [related topic 2] → [related topic 3]
+**Also Study:** [related topic 1] → [related topic 2] → [related topic 3]
 
 RULES:
 - Be CONCISE — students are busy and stressed
@@ -233,7 +193,7 @@ Generate ONE structured question (long question) in authentic DSE style.
 
 Format EXACTLY like this:
 
-📝 **{subject} — Structured Question**
+**{subject} — Structured Question**
 **Topic:** {topic}
 **Total Marks:** [X marks]
 
@@ -249,7 +209,7 @@ Format EXACTLY like this:
 
 ---
 
-✏️ *Attempt this question before checking the marking scheme!*
+*Attempt this question before checking the marking scheme!*
 
 RULES:
 - Parts MUST increase in difficulty: (a) recall → (b) apply → (c) analyze/evaluate
@@ -267,11 +227,11 @@ The student was given this question:
 
 Provide a comprehensive DSE marking scheme:
 
-✅ **Marking Scheme**
+**Marking Scheme**
 
 **(a)** [{x} marks]
-- [Answer point] ✓ (1 mark)
-- [Answer point] ✓ (1 mark)
+- [Answer point] (1 mark)
+- [Answer point] (1 mark)
 [Full working for calculations]
 
 **(b)** [{x} marks]
@@ -280,7 +240,7 @@ Provide a comprehensive DSE marking scheme:
 **(c)** [{x} marks]
 - [Model answer with marking criteria]
 
-📊 **Examiner's Notes:**
+**Examiner's Notes:**
 - **Common mistakes:** [specific errors students make]
 - **Full marks tip:** [exactly what examiners look for]
 - **Partial credit:** [how to get marks even if stuck]
@@ -294,7 +254,7 @@ RULES:
 PLANNER_SYSTEM = """You are Athena AI — the best DSE study planner in Hong Kong.
 Create a DETAILED, PERSONALIZED study plan.
 
-📊 **Your DSE Dashboard**
+**Your DSE Dashboard**
 - Days remaining: [X]
 - Subjects: [X]
 - Daily study hours: [X]
@@ -302,28 +262,28 @@ Create a DETAILED, PERSONALIZED study plan.
 
 ---
 
-🎯 **Priority Ranking** (weakest → strongest)
-1. 🔴 [Subject] — [specific weak area] — [strategy]
-2. 🟡 [Subject] — [area] — [strategy]
-3. 🟢 [Subject] — [area] — [strategy]
+**Priority Ranking** (weakest → strongest)
+1. [Subject] — [specific weak area] — [strategy]
+2. [Subject] — [area] — [strategy]
+3. [Subject] — [area] — [strategy]
 
 ---
 
-📅 **Weekly Schedule Template**
+**Weekly Schedule Template**
 
 | Day | Session 1 | Session 2 | Session 3 |
 |-----|-----------|-----------|-----------|
 | Mon | Subject (topic) | Subject (topic) | Review |
-[… complete table]
+[complete table]
 
 ---
 
-⏰ **Daily Schedule Template** (for {hours}hr study day)
+**Daily Schedule Template** (for {hours}hr study day)
 [Specific time blocks with Pomodoro technique. Include breaks, meals, exercise.]
 
 ---
 
-📋 **Week-by-Week Roadmap**
+**Week-by-Week Roadmap**
 
 **Weeks 1–2:** [Foundation — specific topics]
 **Weeks 3–4:** [Deep practice — specific topics]
@@ -332,21 +292,21 @@ Create a DETAILED, PERSONALIZED study plan.
 
 ---
 
-⚡ **Quick Wins** (easiest marks to gain FAST)
+**Quick Wins** (easiest marks to gain FAST)
 1. [Specific topic/technique] — [why easy marks]
 2. [Specific topic/technique] — [why]
 3. [Specific topic/technique] — [why]
 
 ---
 
-⚠️ **Mistakes to Avoid**
+**Mistakes to Avoid**
 1. [Common DSE mistake]
 2. [Study habit mistake]
 3. [Time management mistake]
 
 ---
 
-🧠 **Study Techniques for Your Subjects**
+**Study Techniques for Your Subjects**
 - [Subject]: [specific technique + application]
 
 RULES:
@@ -367,14 +327,17 @@ RULES:
 def get_client():
     """Initialize and cache the OpenRouter client."""
     try:
-        api_key = st.secrets.get("OPENROUTER_API_KEY", "") or settings.OPENROUTER_API_KEY
+        # Safely try to get API key, silently return None if it fails
+        try:
+            api_key = st.secrets.get("OPENROUTER_API_KEY", "") or settings.OPENROUTER_API_KEY
+        except Exception:
+            # If secrets access fails, try config directly
+            api_key = settings.OPENROUTER_API_KEY or ""
+        
         if not api_key:
-            st.error("⚠️ `OPENROUTER_API_KEY` not found in Streamlit secrets.")
-            st.info(
-                "Add it to Streamlit secrets:\n"
-                '```\nOPENROUTER_API_KEY = "sk-or-v1-..."\n```'
-            )
-            st.stop()
+            # Silently return None if no API key - user will see message only if needed
+            return None
+        
         c = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key,
@@ -382,11 +345,12 @@ def get_client():
         logger.info("OpenRouter client initialized successfully")
         return c
     except Exception as e:
-        st.error(f"⚠️ Failed to initialize OpenRouter: {e}")
-        st.stop()
+        logger.warning(f"OpenRouter initialization issue: {e}")
+        return None
 
 
-client = get_client()
+# Lazily initialize client - start as None, will be looked up when needed
+client = None
 
 
 # ╔════════════════════════════════════════════════════════════════╗
@@ -420,11 +384,16 @@ for key, default in DEFAULTS.items():
     st.session_state.setdefault(key, default)
 
 
+def get_development_fallback_response(response_type, user_input):
+    """Provide fallback responses for development mode when AI is not available."""
+    return "Development mode response"
+
+
 # ╔════════════════════════════════════════════════════════════════╗
-# ║                    HELPER FUNCTIONS                            ║
+# ║                    AI FUNCTIONS                               ║
 # ╚════════════════════════════════════════════════════════════════╝
 
-def parse_json(text):
+def call_claude(system, user_msg, max_tokens=DEFAULT_MAX_TOKENS):
     """Robustly extract a JSON object from AI response."""
     if not text:
         return None
@@ -464,6 +433,11 @@ def validate_mc(data):
 
 def call_claude(system, user_msg, max_tokens=DEFAULT_MAX_TOKENS):
     """Single-turn OpenRouter call with error handling."""
+    # Check if client is available (not in development mode without API key)
+    client = get_client()
+    if client is None:
+        return get_development_fallback_response("single", user_msg)
+    
     try:
         logger.info(f"OpenRouter call: max_tokens={max_tokens}")
         response = client.chat.completions.create(
@@ -482,12 +456,18 @@ def call_claude(system, user_msg, max_tokens=DEFAULT_MAX_TOKENS):
         return None
     except Exception as e:
         logger.error(f"OpenRouter error: {e}", exc_info=True)
-        st.error(f"❌ AI Error: {e}")
+        st.error(f"AI Error: {e}")
         return None
 
 
 def call_claude_stream(system, messages, max_tokens=1500):
     """Streaming generator for multi-turn chat using OpenRouter."""
+    # Check if client is available (not in development mode without API key)
+    client = get_client()
+    if client is None:
+        yield get_development_fallback_response("stream", messages[-1]["content"] if messages else "Hello")
+        return
+    
     try:
         logger.info(f"OpenRouter stream: {len(messages)} messages")
 
@@ -513,7 +493,7 @@ def call_claude_stream(system, messages, max_tokens=1500):
         logger.info("OpenRouter stream completed")
     except Exception as e:
         logger.error(f"OpenRouter stream error: {e}", exc_info=True)
-        yield f"\n\n❌ Error: {e}"
+        yield f"\n\nError: {e}"
 
 
 def check_and_log_feature(feature: str) -> Tuple[bool, str]:
@@ -532,6 +512,16 @@ def check_and_log_feature(feature: str) -> Tuple[bool, str]:
 
 def generate_quiz(topic, subject):
     """Generate and validate a quiz MC question."""
+    client = get_client()
+    if client is None:
+        # Development mode fallback
+        return {
+            "question": f"Sample Quiz Question: What is the capital of France? (Development Mode)",
+            "options": ["Paris", "London", "Berlin", "Madrid"],
+            "correct": 0,
+            "explanation": "This is a sample question for development testing. Configure OPENROUTER_API_KEY to enable real AI-generated questions."
+        }
+
     text = call_claude(
         QUIZ_SYSTEM.format(subject=subject, topic=topic),
         f"Generate a DSE-level question about: {topic}",
@@ -545,6 +535,16 @@ def generate_quiz(topic, subject):
 
 def generate_pp_mc(topic, subject):
     """Generate and validate a past-paper MC question."""
+    client = get_client()
+    if client is None:
+        # Development mode fallback
+        return {
+            "question": f"Sample Past Paper MC: Calculate 2 + 2 = ? (Development Mode)",
+            "options": ["3", "4", "5", "6"],
+            "correct": 1,
+            "explanation": "This is a sample past paper question for development testing. Configure OPENROUTER_API_KEY to enable real AI-generated questions."
+        }
+
     text = call_claude(
         PAST_PAPER_MC_SYSTEM.format(subject=subject, topic=topic),
         f"Generate a DSE past paper MC about: {topic}",
@@ -576,6 +576,12 @@ def generate_marking(question_text, subject):
 
 def generate_plan(subjects_taken, exam_date, hours, weak, extra):
     """Generate a personalised study plan."""
+    client = get_client()
+    if client is None:
+        # Development mode fallback
+        days_left = max((exam_date - datetime.now().date()).days, 1)
+        return "# Development Mode Study Plan\n\nSample study plan for testing."
+
     days_left = max((exam_date - datetime.now().date()).days, 1)
     prompt = (
         f"Student Profile:\n"
@@ -627,7 +633,9 @@ with st.sidebar:
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        if st.session_state.get("auth_method") == "demo":
+        if st.session_state.get("auth_method") == "development":
+            st.caption("Development Mode")
+        elif st.session_state.get("auth_method") == "demo":
             st.caption("👤 Guest Mode")
         else:
             st.caption(f"👤 {st.session_state.get('user_email', 'User')}")
@@ -742,7 +750,15 @@ if st.session_state.get("show_pricing"):
     st.stop()
 
 if st.session_state.get("show_subscription"):
-    st.markdown("# 👑 Manage Subscription")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("# 👑 Manage Subscription")
+    with col2:
+        if st.button("🔄 Refresh", help="Refresh and reload data"):
+            # Clear caches and refresh database connection
+            st.cache_resource.clear()
+            db.refresh_connection()
+            st.rerun()
     
     if not st.session_state.get("is_premium"):
         st.error("You don't have an active premium subscription.")
@@ -752,28 +768,51 @@ if st.session_state.get("show_subscription"):
         # Show subscription details
         user_id = st.session_state.get("user_id")
         if user_id and db.is_connected():
-            subscription = db.client.table('subscriptions').select('*').eq('user_id', user_id).eq('status', 'active').single().execute()
-            if subscription.data:
-                sub_data = subscription.data
-                st.markdown("### 📊 Subscription Details")
-                st.info(f"""
-                **Plan:** {sub_data.get('plan_type', 'Unknown').title()}
-                **Status:** {sub_data.get('status', 'Unknown').title()}
-                **Started:** {sub_data.get('started_at', 'Unknown')[:10]}
-                **Renews:** {sub_data.get('renews_at', 'Unknown')[:10]}
-                """)
-                
-                if st.button("❌ Cancel Subscription", use_container_width=True, type="secondary"):
-                    if db.cancel_subscription(user_id):
-                        st.success("Subscription cancelled. You'll retain premium access until the end of your billing period.")
-                        st.session_state.is_premium = False
-                        st.rerun()
-                    else:
-                        st.error("Failed to cancel subscription. Please contact support.")
-            else:
-                st.warning("Could not load subscription details.")
+            try:
+                # Query for active subscriptions (don't use .single() as it expects exactly 1 row)
+                subscriptions = db.client.table('subscriptions').select('*').eq('user_id', user_id).eq('status', 'active').execute()
+                if subscriptions.data and len(subscriptions.data) > 0:
+                    sub_data = subscriptions.data[0]  # Get the first active subscription
+                    st.markdown("### Subscription Details")
+                    st.info(f"""
+                    **Plan:** {sub_data.get('plan_type', 'Unknown').title()}
+                    **Status:** {sub_data.get('status', 'Unknown').title()}
+                    **Started:** {sub_data.get('started_at', 'Unknown')[:10] if sub_data.get('started_at') else 'Unknown'}
+                    **Renews:** {sub_data.get('renews_at', 'Unknown')[:10] if sub_data.get('renews_at') else 'Unknown'}
+                    """)
+                    
+                    if st.button("Cancel Subscription", use_container_width=True, type="secondary"):
+                        if db.cancel_subscription(user_id):
+                            st.success("Subscription cancelled. You'll retain premium access until the end of your billing period.")
+                            st.session_state.is_premium = False
+                            st.rerun()
+                        else:
+                            st.error("Failed to cancel subscription. Please contact support.")
+                else:
+                    st.info("No active subscription found. Your premium access may be from development mode or a different source.")
+            except Exception as e:
+                error_str = str(e).lower()
+                if "could not find the table" in error_str or "pgrst205" in error_str:
+                    st.error("⚠️ Database tables not yet set up")
+                    st.error("""
+                    The subscriptions table doesn't exist yet. Please follow these steps:
+                    
+                    1. **Open your Supabase Dashboard**: https://supabase.com
+                    2. **Go to SQL Editor** and create a new query
+                    3. **Run the SQL** from the SUPABASE_SETUP.md file
+                    4. **Click the Refresh button above** to reload
+                    
+                    If you've already run the SQL, try these steps:
+                    - Click the **Refresh** button above
+                    - Wait 10 seconds (Supabase needs time to apply schema changes)
+                    - Refresh your browser page (F5)
+                    """)
+                else:
+                    st.error(f"⚠️ Error loading subscription: {e}")
+                    with st.expander("Debug Info"):
+                        st.code(error_str)
     
-    if st.button("← Back to App"):
+    if st.button("Back to App"):
         st.session_state.show_subscription = False
         st.rerun()
     st.stop()
@@ -1282,6 +1321,6 @@ st.markdown("")
 st.markdown("")
 st.divider()
 st.caption(
-    "🏛️ **Athena AI** v2.1 — Built for DSE students, "
+    "**Athena AI** v2.1 — Built for DSE students, "
     "by a DSE student. &nbsp;|&nbsp; Powered by OpenRouter AI"
 )
