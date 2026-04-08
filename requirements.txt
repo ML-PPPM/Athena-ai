@@ -5,9 +5,7 @@ pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 stripe>=5.0.0
 flask>=2.0.0
-smtplib
 email-validator>=2.0.0
-secrets
 gtts>=2.4.0
 PyMuPDF>=1.23.0
 python-docx>=1.1.0
