@@ -4,10 +4,11 @@ A **Streamlit-powered AI tutor** for Hong Kong DSE students, powered by OpenRout
 
 ## ✨ Features
 
-- **📚 Learn Mode** — Ask any topic → get smart, exam-ready summaries
-- **🧠 Quiz Mode** — Generate random DSE-style questions with streak tracking  
+- **📚 Learn Mode** — Ask any topic → get smart, exam-ready summaries instantly
+- **🧠 Quiz Mode** — Generate random DSE-style questions with streak tracking
 - **📝 Past Paper Mode** — Practice authentic past paper MC and structured questions
 - **📋 Study Planner** — Get personalized week-by-week study roadmaps
+- **🎯 Intelligent Subject Detection** — AI automatically detects which DSE subject you're asking about
 
 ## 🚀 Quick Start
 
@@ -50,12 +51,50 @@ If you just want to test the UI without setting up Supabase:
 The setup script will guide you through configuring:
 
 - **Supabase**: For user authentication and database
-- **OpenRouter**: For AI chat functionality  
+- **OpenRouter**: For AI chat functionality
+- **Email Verification**: For secure user registration (optional)
 - **Stripe**: For payment processing (optional)
 
 The app will open in your browser at `http://localhost:8501`
 
-## � Stripe Setup (for Automatic Subscriptions)
+## 📧 Email Verification Setup (Optional)
+
+Email verification adds an extra layer of security by requiring users to verify their email addresses before accessing the app.
+
+### 1. Configure SMTP Settings
+
+Add to your `.env` file:
+```bash
+# Email verification settings
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+EMAIL_FROM=your-email@gmail.com
+EMAIL_VERIFICATION_ENABLED=true
+```
+
+### 2. Gmail App Password Setup
+
+If using Gmail:
+1. Go to [Google Account settings](https://myaccount.google.com/)
+2. Enable 2-Factor Authentication
+3. Go to **Security** → **App passwords**
+4. Generate an app password for "Athena AI"
+5. Use this app password (not your regular password) in `SMTP_PASSWORD`
+
+### 3. Database Setup
+
+Run the SQL in `email_verification_setup.sql` in your Supabase SQL editor to create the required tables.
+
+### 4. Alternative Email Providers
+
+For other email providers, update the SMTP settings accordingly:
+- **Outlook/Hotmail**: `smtp-mail.outlook.com:587`
+- **Yahoo**: `smtp.mail.yahoo.com:587`
+- **Custom SMTP**: Use your provider's SMTP settings
+
+## 💳 Stripe Setup (for Automatic Subscriptions)
 
 ### 1. Create Stripe Account
 - Sign up at [stripe.com](https://stripe.com)

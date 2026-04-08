@@ -49,44 +49,128 @@ def render_auth_page():
     # ─────────────────────────────────────────────────────────────
     with tab1:
         st.markdown("### Create Account")
-        email = st.text_input("📧 Email", key="signup_email")
-        password = st.text_input("🔐 Password (min 8 chars)", type="password", key="signup_password")
-        password_confirm = st.text_input(
-            "Confirm Password", type="password", key="signup_confirm"
-        )
-        full_name = st.text_input("👤 Full Name (optional)", key="signup_name")
 
-        if st.button("🚀 Create Account", use_container_width=True, type="primary", disabled=not supabase_configured):
-            if not supabase_configured:
-                st.error("Supabase not configured. Use Development Mode instead.")
-            elif not email or not password:
-                st.error("Email and password are required")
-            elif len(password) < 8:
-                st.error("Password must be at least 8 characters")
-            elif password != password_confirm:
-                st.error("Passwords don't match")
-            else:
-                try:
-                    # Attempt to sign up with Supabase
-                    response = db.client.auth.sign_up({
-                        "email": email,
-                        "password": password,
-                        "options": {
-                            "data": {
-                                "full_name": full_name
-                            }
-                        }
-                    })
-                    if response.user:
-                        # Create user in database
-                        db.create_user(response.user.id, email, full_name, False)
-                        st.success("Account created successfully! Please check your email to verify your account.")
-                        logger.info(f"Signup successful: {email}")
+        # Check if user is in verification step
+        if st.session_state.get("awaiting_verification"):
+            st.markdown("### 📧 Verify Your Email")
+            st.info(f"We sent a verification code to **{st.session_state.get('verification_email', '')}**")
+
+            verification_code = st.text_input("Enter verification code", key="verification_code", max_chars=6)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Verify Email", use_container_width=True, type="primary"):
+                    if not verification_code:
+                        st.error("Please enter the verification code")
                     else:
-                        st.error("Failed to create account. Please try again.")
-                except Exception as e:
-                    st.error(f"Signup failed: {str(e)}")
-                    logger.error(f"Signup error: {e}")
+                        from email_verification import email_verifier
+                        if email_verifier.enabled and db.verify_email_code(
+                            st.session_state.verification_email, verification_code.upper()
+                        ):
+                            # Code verified, complete signup
+                            try:
+                                response = db.client.auth.sign_up({
+                                    "email": st.session_state.verification_email,
+                                    "password": st.session_state.verification_password,
+                                    "options": {
+                                        "data": {
+                                            "full_name": st.session_state.get("verification_name", "")
+                                        }
+                                    }
+                                })
+                                if response.user:
+                                    # Create user in database and mark as verified
+                                    db.create_user(response.user.id, st.session_state.verification_email,
+                                                 st.session_state.get("verification_name", ""), False)
+                                    db.mark_email_verified(response.user.id)
+
+                                    st.success("Account created and verified successfully! Welcome to Athena AI!")
+                                    logger.info(f"Signup completed: {st.session_state.verification_email}")
+
+                                    # Clear verification state
+                                    for key in ["awaiting_verification", "verification_email", "verification_password", "verification_name"]:
+                                        if key in st.session_state:
+                                            del st.session_state[key]
+
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to create account. Please try again.")
+                            except Exception as e:
+                                st.error(f"Account creation failed: {str(e)}")
+                                logger.error(f"Signup completion error: {e}")
+                        else:
+                            st.error("Invalid or expired verification code. Please try again.")
+
+            with col2:
+                if st.button("🔄 Resend Code", use_container_width=True):
+                    from email_verification import email_verifier
+                    code = email_verifier.send_verification_code(st.session_state.verification_email)
+                    if code and db.store_verification_code(st.session_state.verification_email, code):
+                        st.success("Verification code resent!")
+                    else:
+                        st.error("Failed to resend code. Please try again later.")
+
+            if st.button("⬅️ Back to Sign Up", use_container_width=True):
+                # Clear verification state
+                for key in ["awaiting_verification", "verification_email", "verification_password", "verification_name"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
+
+        else:
+            # Normal signup form
+            email = st.text_input("📧 Email", key="signup_email")
+            password = st.text_input("🔐 Password (min 8 chars)", type="password", key="signup_password")
+            password_confirm = st.text_input(
+                "Confirm Password", type="password", key="signup_confirm"
+            )
+            full_name = st.text_input("👤 Full Name (optional)", key="signup_name")
+
+            if st.button("🚀 Create Account", use_container_width=True, type="primary", disabled=not supabase_configured):
+                if not supabase_configured:
+                    st.error("Supabase not configured. Use Development Mode instead.")
+                elif not email or not password:
+                    st.error("Email and password are required")
+                elif len(password) < 8:
+                    st.error("Password must be at least 8 characters")
+                elif password != password_confirm:
+                    st.error("Passwords don't match")
+                else:
+                    from email_verification import email_verifier
+                    if email_verifier.enabled:
+                        # Send verification code
+                        code = email_verifier.send_verification_code(email)
+                        if code and db.store_verification_code(email, code):
+                            # Store signup data and switch to verification mode
+                            st.session_state.awaiting_verification = True
+                            st.session_state.verification_email = email
+                            st.session_state.verification_password = password
+                            st.session_state.verification_name = full_name
+                            st.success("Verification code sent to your email!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to send verification email. Please check your email address and try again.")
+                    else:
+                        # Email verification disabled, proceed with normal signup
+                        try:
+                            response = db.client.auth.sign_up({
+                                "email": email,
+                                "password": password,
+                                "options": {
+                                    "data": {
+                                        "full_name": full_name
+                                    }
+                                }
+                            })
+                            if response.user:
+                                db.create_user(response.user.id, email, full_name, False)
+                                st.success("Account created successfully! Please check your email to verify your account.")
+                                logger.info(f"Signup successful: {email}")
+                            else:
+                                st.error("Failed to create account. Please try again.")
+                        except Exception as e:
+                            st.error(f"Signup failed: {str(e)}")
+                            logger.error(f"Signup error: {e}")
 
     # ─────────────────────────────────────────────────────────────
     # SIGN IN TAB
@@ -112,17 +196,24 @@ def render_auth_page():
                         # Get user data
                         user_data = db.get_user(response.user.id)
                         if user_data:
-                            # Check subscription status and update if needed
-                            check_and_update_premium_status(response.user.id, user_data)
+                            # Check if email verification is required
+                            from email_verification import email_verifier
+                            if email_verifier.enabled and not user_data.get("email_verified", False):
+                                st.error("Please verify your email address before signing in. Check your email for a verification code.")
+                                st.info("Didn't receive the code? Try signing up again to resend it.")
+                                logger.warning(f"Unverified user attempted signin: {email}")
+                            else:
+                                # Check subscription status and update if needed
+                                check_and_update_premium_status(response.user.id, user_data)
 
-                            st.session_state.user_id = response.user.id
-                            st.session_state.user_email = response.user.email
-                            st.session_state.is_authenticated = True
-                            st.session_state.is_premium = user_data.get("is_premium", False)
-                            st.session_state.auth_method = "supabase"
-                            logger.info(f"Signin successful: {email}")
-                            st.success(f"Welcome back, {user_data.get('full_name', 'User')}!")
-                            st.rerun()
+                                st.session_state.user_id = response.user.id
+                                st.session_state.user_email = response.user.email
+                                st.session_state.is_authenticated = True
+                                st.session_state.is_premium = user_data.get("is_premium", False)
+                                st.session_state.auth_method = "supabase"
+                                logger.info(f"Signin successful: {email}")
+                                st.success(f"Welcome back, {user_data.get('full_name', 'User')}!")
+                                st.rerun()
                         else:
                             st.error("User data not found. Please contact support.")
                     else:

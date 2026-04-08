@@ -5,12 +5,21 @@ import re
 import logging
 from datetime import datetime, timedelta
 from typing import Tuple
+import base64
+from io import BytesIO
+import fitz  # PyMuPDF for PDF handling
+from PIL import Image
+import docx
+from gtts import gTTS
+import tempfile
+import os
 
 # Local imports
 from config import settings, MAX_CHAT_HISTORY, DEFAULT_MAX_TOKENS
 from database import db
 from auth import init_auth_session, render_auth_page, check_usage_limit, render_premium_badge, logout
 from payments import render_pricing_table
+from subject_detector import subject_detector
 
 # ╔════════════════════════════════════════════════════════════════╗
 # ║                  ATHENA AI — COMPLETE DSE TEACHER              ║
@@ -22,6 +31,84 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# ╔════════════════════════════════════════════════════════════════╗
+# ║                     FILE PROCESSING FUNCTIONS                 ║
+# ╚════════════════════════════════════════════════════════════════╝
+
+def process_uploaded_file(uploaded_file):
+    """Process uploaded file and return content and display info."""
+    if uploaded_file is None:
+        return None, None
+
+    file_name = uploaded_file.name
+    file_type = uploaded_file.type
+    file_size = uploaded_file.size
+
+    # Handle different file types
+    if file_type.startswith('image/'):
+        # For images, return base64 encoded data and display info
+        image_data = uploaded_file.getvalue()
+        encoded_image = base64.b64encode(image_data).decode('utf-8')
+        display_content = f"![{file_name}](data:{file_type};base64,{encoded_image})"
+        ai_content = f"[Image uploaded: {file_name}] This is an image file. Please analyze the content of this image and respond accordingly."
+
+    elif file_type == 'application/pdf':
+        # For PDFs, extract text content
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
+
+            doc = fitz.open(tmp_path)
+            text_content = ""
+            for page in doc:
+                text_content += page.get_text()
+            doc.close()
+
+            os.unlink(tmp_path)  # Clean up temp file
+
+            display_content = f"📄 **{file_name}**\n\n{text_content[:1000]}{'...' if len(text_content) > 1000 else ''}"
+            ai_content = f"[PDF Document: {file_name}]\nContent:\n{text_content}"
+
+        except Exception as e:
+            display_content = f"📄 **{file_name}** (Could not extract text: {str(e)})"
+            ai_content = f"[PDF Document: {file_name}] Could not extract text content due to error: {str(e)}"
+
+    elif file_type in ['text/plain', 'application/txt']:
+        # For text files
+        text_content = uploaded_file.getvalue().decode('utf-8')
+        display_content = f"📝 **{file_name}**\n\n{text_content[:1000]}{'...' if len(text_content) > 1000 else ''}"
+        ai_content = f"[Text File: {file_name}]\nContent:\n{text_content}"
+
+    elif file_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                       'application/msword']:
+        # For Word documents
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_path = tmp_file.name
+
+            doc = docx.Document(tmp_path)
+            text_content = ""
+            for paragraph in doc.paragraphs:
+                text_content += paragraph.text + "\n"
+
+            os.unlink(tmp_path)  # Clean up temp file
+
+            display_content = f"📄 **{file_name}**\n\n{text_content[:1000]}{'...' if len(text_content) > 1000 else ''}"
+            ai_content = f"[Word Document: {file_name}]\nContent:\n{text_content}"
+
+        except Exception as e:
+            display_content = f"📄 **{file_name}** (Could not extract text: {str(e)})"
+            ai_content = f"[Word Document: {file_name}] Could not extract text content due to error: {str(e)}"
+
+    else:
+        # For other file types, just show file info
+        display_content = f"📎 **{file_name}** ({file_type}, {file_size} bytes)"
+        ai_content = f"[File uploaded: {file_name}] This is a {file_type} file with size {file_size} bytes. Please acknowledge the file upload."
+
+    return display_content, ai_content
 
 st.set_page_config(
     page_title="Athena AI 🏛️ — DSE Teacher",
@@ -35,6 +122,21 @@ st.set_page_config(
 # ═══════════════════════════════════════════════════════════════════
 
 init_auth_session()
+
+# Initialize subject detection variables
+if "detected_subject" not in st.session_state:
+    st.session_state.detected_subject = None
+if "subject_confidence" not in st.session_state:
+    st.session_state.subject_confidence = 0.0
+
+if "learn_uploader_id" not in st.session_state:
+    st.session_state.learn_uploader_id = 0
+if "quiz_uploader_id" not in st.session_state:
+    st.session_state.quiz_uploader_id = 0
+if "pp_mc_uploader_id" not in st.session_state:
+    st.session_state.pp_mc_uploader_id = 0
+if "pp_structured_uploader_id" not in st.session_state:
+    st.session_state.pp_structured_uploader_id = 0
 
 if not st.session_state.get("is_authenticated"):
     render_auth_page()
@@ -151,7 +253,33 @@ RULES:
 - Understand Chinese/Cantonese input; respond in English unless user writes in Chinese
 - If the student asks a follow-up, build on your previous summary
 - Make the complex SIMPLE, never the simple complex
-- Be encouraging — DSE students need support!"""
+- Be encouraging — DSE students need support!
+- If the detected subject seems wrong, adapt your response to fit the actual question content
+- Be flexible with interdisciplinary questions that span multiple subjects"""
+
+VOICE_SYSTEM = """You are Athena AI — a warm, engaging spoken tutor.
+Subject: {subject}
+
+Produce a listening-friendly audio lesson for the student. Use short, natural sentences and clear transitions. Include:
+- A brief introduction to the topic
+- Key concepts explained simply
+- One or two examples or analogies
+- A short recap at the end
+
+Write the response so it sounds good when spoken aloud. Do not include raw JSON or markup.
+"""
+
+PODCAST_SYSTEM = """You are Athena AI — a professional academic podcast host.
+Subject: {subject}
+
+Turn the student prompt into a polished podcast episode script. Structure the response with:
+- A catchy introduction
+- Clear segment headings
+- Academic explanation and insights
+- A conclusion with study takeaways
+
+Use an engaging, conversational tone that is still academically strong. Keep it suitable for a 5-7 minute educational podcast.
+"""
 
 QUIZ_SYSTEM = """You are a DSE quiz question generator.
 Subject: {subject}. Topic: {topic}.
@@ -376,6 +504,10 @@ DEFAULTS = {
     "pp_answer":       None,
     "pp_show_answer":  False,
     "plan":            None,
+    "voice_text":      None,
+    "voice_audio":     None,
+    "podcast_text":    None,
+    "podcast_audio":   None,
     "prev_subject":    None,
     "prev_mode":       None,
 }
@@ -457,6 +589,21 @@ def call_claude(system, user_msg, max_tokens=DEFAULT_MAX_TOKENS):
     except Exception as e:
         logger.error(f"OpenRouter error: {e}", exc_info=True)
         st.error(f"AI Error: {e}")
+        return None
+
+
+def text_to_speech(text: str, lang: str = "en") -> bytes | None:
+    """Convert text to speech using gTTS and return MP3 bytes."""
+    if not text:
+        return None
+    try:
+        tts = gTTS(text=text, lang=lang, slow=False)
+        audio_buffer = BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
+        return audio_buffer.read()
+    except Exception as e:
+        logger.error(f"TTS generation failed: {e}", exc_info=True)
         return None
 
 
@@ -648,22 +795,40 @@ with st.sidebar:
     st.caption("Your Complete DSE Teacher")
     st.divider()
 
-    sub_key = st.selectbox("📘 Subject", list(SUBJECTS.keys()), key="subject_sel")
-    subject = SUBJECTS[sub_key]
-    hint = TOPIC_HINTS.get(subject, "Enter any topic")
+    # Intelligent Subject Detection - Always Active
+    detected_subject = st.session_state.get("detected_subject")
+    subject_confidence = st.session_state.get("subject_confidence", 0.0)
 
-    if st.session_state.prev_subject and st.session_state.prev_subject != sub_key:
+    if detected_subject and subject_confidence > 0.2:  # Lower threshold for always showing detection
+        st.markdown(f"🎯 **Detected Subject:** {detected_subject}")
+        confidence_pct = int(subject_confidence * 100)
+        st.progress(subject_confidence, text=f"Confidence: {confidence_pct}%")
+
+        subject = detected_subject
+        hint = subject_detector.get_subject_hints(detected_subject)[0]
+    else:
+        # Show intelligent detection status
+        st.markdown("🎯 **AI Subject Detection**")
+        st.caption("I'll automatically detect the subject from your questions!")
+        st.info("💡 Try asking: 'How do I solve quadratic equations?' or 'Explain photosynthesis'")
+
+        subject = "General"  # Default fallback
+        hint = "Ask me anything about your DSE subjects!"
+
+    # Remove subject comparison logic since we don't manually select anymore
+    current_subject = subject
+    if st.session_state.prev_subject and st.session_state.prev_subject != current_subject:
         st.session_state.messages = []
         reset_quiz()
         reset_pp_mc()
         reset_pp_long()
-    st.session_state.prev_subject = sub_key
+    st.session_state.prev_subject = current_subject
 
     st.markdown("")
 
     mode = st.radio(
         "🎯 Mode",
-        ["📚 Learn", "🧠 Quiz", "📝 Past Paper", "📋 Study Planner"],
+        ["📚 Learn", "🧠 Quiz", "📝 Past Paper", "📋 Study Planner", "🎙️ Voice", "🎧 Podcast"],
         key="mode_sel",
     )
 
@@ -817,13 +982,15 @@ if st.session_state.get("show_subscription"):
         st.rerun()
     st.stop()
 
-st.title(sub_key)
+st.title(subject)
 
 captions = {
     "📚 Learn":         "💡 Ask any topic → get a smart, exam-ready summary instantly",
     "🧠 Quiz":          "🧪 Enter a topic → answer questions → track your score",
     "📝 Past Paper":    "📋 Practice with authentic DSE-style questions",
     "📋 Study Planner": "📅 Get your personalized DSE study roadmap",
+    "🎙️ Voice":        "🔊 Listen to study content as an audio lesson",
+    "🎧 Podcast":      "🎙️ Turn your topic into an academic podcast episode",
 }
 st.caption(captions.get(mode, ""))
 st.divider()
@@ -840,12 +1007,92 @@ if mode == "📚 Learn":
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            # Handle messages with file attachments
+            if isinstance(msg["content"], dict) and "text" in msg["content"]:
+                # Message with file attachment
+                st.markdown(msg["content"]["text"])
+                if "file_display" in msg["content"]:
+                    st.markdown(msg["content"]["file_display"])
+            else:
+                # Regular text message
+                st.markdown(msg["content"])
 
-    if prompt := st.chat_input(f"What do you want to learn? (e.g. {hint})"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    # File upload and text input container
+    with st.container():
+        col1, col2 = st.columns([3, 1])
+
+        with col1:
+            uploaded_file = st.file_uploader(
+                "Upload a file (optional)",
+                type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'docx', 'doc'],
+                help="Upload images, PDFs, or documents to discuss with the AI",
+                key=f"file_uploader_learn_{st.session_state.learn_uploader_id}"
+            )
+
+        with col2:
+            if st.button("🗑️ Clear", help="Clear uploaded file"):
+                st.session_state.learn_uploader_id += 1
+                st.rerun()
+
+        prompt = st.chat_input(f"What do you want to learn? (e.g. {hint})")
+
+    if prompt or uploaded_file:
+        # Process uploaded file if any
+        file_display = None
+        file_ai_content = None
+        combined_prompt = prompt or ""
+
+        if uploaded_file:
+            file_display, file_ai_content = process_uploaded_file(uploaded_file)
+            if file_ai_content:
+                combined_prompt += f"\n\n{file_ai_content}"
+
+        # Intelligent subject detection - always check for better matches
+        current_detected = st.session_state.get("detected_subject")
+        current_confidence = st.session_state.get("subject_confidence", 0.0)
+
+        # Always try to detect subject, but be more conservative about changing
+        detected_sub, confidence = subject_detector.detect_subject(combined_prompt)
+
+        # Update subject if:
+        # 1. No current subject detected, or
+        # 2. New detection has much higher confidence (>1.5x), or
+        # 3. New detection has reasonable confidence and current is very low
+        should_update = (
+            not current_detected or
+            (detected_sub and confidence > current_confidence * 1.5) or
+            (detected_sub and confidence > 0.4 and current_confidence < 0.2)
+        )
+
+        if should_update and detected_sub and confidence > 0.2:
+            old_subject = current_detected
+            st.session_state.detected_subject = detected_sub
+            st.session_state.subject_confidence = confidence
+            subject = detected_sub  # Update subject for this response
+
+            if old_subject and old_subject != detected_sub:
+                st.info(f"🔄 Switched from {old_subject} to {detected_sub} based on your question!")
+            elif not old_subject:
+                st.info(f"🎯 Detected subject: {detected_sub}!")
+            st.rerun()  # Refresh to show updated subject in sidebar
+
+        # Create message content (handle both text and file)
+        if file_display:
+            message_content = {
+                "text": prompt or "Uploaded a file for analysis:",
+                "file_display": file_display
+            }
+        else:
+            message_content = combined_prompt
+
+        st.session_state.messages.append({"role": "user", "content": message_content})
         with st.chat_message("user"):
-            st.markdown(prompt)
+            if isinstance(message_content, dict):
+                st.markdown(message_content["text"])
+                if "file_display" in message_content:
+                    st.markdown(message_content["file_display"])
+            else:
+                st.markdown(message_content)
 
         with st.chat_message("assistant"):
             response = st.write_stream(
@@ -868,8 +1115,92 @@ if mode == "📚 Learn":
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#                        🧠  QUIZ MODE
+#                        🎙️ VOICE MODE
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+elif mode == "🎙️ Voice":
+
+    st.markdown("### 🎧 Voice Study Mode")
+    st.caption("Type a topic and get a listening-friendly study lesson with audio.")
+
+    voice_prompt = st.text_area(
+        "What do you want to study?",
+        placeholder="e.g. Explain the water cycle in a way I can listen to while revising.",
+        height=120,
+        key="voice_prompt",
+    )
+
+    if st.button("Generate Voice Lesson", type="primary", use_container_width=True):
+        if not voice_prompt.strip():
+            st.warning("Please enter a topic or question to create your voice lesson.")
+        else:
+            voice_text = call_claude(
+                VOICE_SYSTEM.format(subject=subject),
+                voice_prompt,
+                max_tokens=1200,
+            )
+            st.session_state.voice_text = voice_text
+            st.session_state.voice_audio = text_to_speech(voice_text) if voice_text else None
+            st.rerun()
+
+    if st.session_state.voice_text:
+        st.markdown("### 📘 Voice Lesson Transcript")
+        st.markdown(st.session_state.voice_text)
+        if st.session_state.voice_audio:
+            st.audio(st.session_state.voice_audio, format="audio/mp3")
+            st.download_button(
+                "Download Voice Lesson",
+                st.session_state.voice_audio,
+                file_name="athena_voice_lesson.mp3",
+                mime="audio/mp3",
+            )
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#                        🎧 PODCAST MODE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+elif mode == "🎧 Podcast":
+
+    st.markdown("### 🎙️ Podcast Mode")
+    st.caption("Type a study topic and get an academic podcast episode you can listen to.")
+
+    podcast_prompt = st.text_area(
+        "What should the podcast episode cover?",
+        placeholder="e.g. A podcast about the causes and effects of climate change for DSE Geography.",
+        height=120,
+        key="podcast_prompt",
+    )
+
+    if st.button("Create Podcast Episode", type="primary", use_container_width=True):
+        if not podcast_prompt.strip():
+            st.warning("Please enter a topic or theme for the podcast episode.")
+        else:
+            podcast_text = call_claude(
+                PODCAST_SYSTEM.format(subject=subject),
+                podcast_prompt,
+                max_tokens=1300,
+            )
+            st.session_state.podcast_text = podcast_text
+            st.session_state.podcast_audio = text_to_speech(podcast_text) if podcast_text else None
+            st.rerun()
+
+    if st.session_state.podcast_text:
+        st.markdown("### 📘 Podcast Script")
+        st.markdown(st.session_state.podcast_text)
+        if st.session_state.podcast_audio:
+            st.audio(st.session_state.podcast_audio, format="audio/mp3")
+            st.download_button(
+                "Download Podcast Episode",
+                st.session_state.podcast_audio,
+                file_name="athena_podcast_episode.mp3",
+                mime="audio/mp3",
+            )
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#                        🧠  QUIZ MODE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 elif mode == "🧠 Quiz":
 
@@ -879,10 +1210,36 @@ elif mode == "🧠 Quiz":
                 f"🧠 **Quiz Mode** — Enter a topic below to start.\n\n"
                 f"*e.g. {hint}*"
             )
-        if prompt := st.chat_input(f"Topic to quiz on? (e.g. {hint})"):
-            st.session_state.topic = prompt
+
+        # File upload and text input container
+        with st.container():
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+                uploaded_file = st.file_uploader(
+                    "Upload a file (optional)",
+                    type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'docx', 'doc'],
+                    help="Upload images, PDFs, or documents to quiz on",
+                    key=f"file_uploader_quiz_{st.session_state.quiz_uploader_id}"
+                )
+
+            with col2:
+                if st.button("🗑️ Clear", help="Clear uploaded file"):
+                    st.session_state.quiz_uploader_id += 1
+                    st.rerun()
+
+            prompt = st.chat_input(f"Topic to quiz on? (e.g. {hint})")
+
+        if prompt or uploaded_file:
+            combined_prompt = prompt or ""
+            if uploaded_file:
+                _, file_ai_content = process_uploaded_file(uploaded_file)
+                if file_ai_content:
+                    combined_prompt += f"\n\n{file_ai_content}"
+
+            st.session_state.topic = combined_prompt
             with st.spinner("🧪 Generating question…"):
-                q = generate_quiz(prompt, subject)
+                q = generate_quiz(combined_prompt, subject)
                 if q:
                     st.session_state.quiz = q
                     st.session_state.answered = False
@@ -893,6 +1250,15 @@ elif mode == "🧠 Quiz":
 
     else:
         q = st.session_state.quiz
+
+        # Validate quiz data structure
+        if not isinstance(q, dict) or not all(key in q for key in ["question", "A", "B", "C", "D", "answer"]):
+            st.error("❌ Quiz data is corrupted. Please generate a new question.")
+            if st.button("🔄 Generate New Question", use_container_width=True):
+                st.session_state.quiz = None
+                st.session_state.topic = None
+                st.rerun()
+            st.stop()  # Stop execution here if quiz is corrupted
 
         if st.session_state.topic:
             st.caption(f"📌 Topic: **{st.session_state.topic}**")
@@ -997,8 +1363,36 @@ elif mode == "📝 Past Paper":
                     f"📝 **Past Paper MC** — Enter a topic below.\n\n"
                     f"*e.g. {hint}*"
                 )
-            if prompt := st.chat_input(f"Topic for past paper MC? (e.g. {hint})"):
-                st.session_state.topic = prompt
+
+            # File upload and text input container
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+
+                with col1:
+                    uploaded_file = st.file_uploader(
+                        "Upload a file (optional)",
+                        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'docx', 'doc'],
+                        help="Upload images, PDFs, or documents to generate MC questions from",
+                        key=f"file_uploader_pp_mc_{st.session_state.pp_mc_uploader_id}"
+                    )
+
+                with col2:
+                    if st.button("🗑️ Clear", help="Clear uploaded file"):
+                        st.session_state.pp_mc_uploader_id += 1
+                        st.rerun()
+
+                prompt = st.chat_input(f"Topic for past paper MC? (e.g. {hint})")
+
+            if prompt or uploaded_file:
+                # Process uploaded file if any
+                combined_prompt = prompt or ""
+
+                if uploaded_file:
+                    _, file_ai_content = process_uploaded_file(uploaded_file)
+                    if file_ai_content:
+                        combined_prompt += f"\n\n{file_ai_content}"
+
+                st.session_state.topic = combined_prompt
                 with st.spinner("📝 Generating DSE Paper 1 MC…"):
                     q = generate_pp_mc(prompt, subject)
                     if q:
@@ -1104,8 +1498,36 @@ elif mode == "📝 Past Paper":
                     f"✍️ **Structured Question** — Enter a topic below.\n\n"
                     f"*e.g. {hint}*"
                 )
-            if prompt := st.chat_input(f"Topic for structured Q? (e.g. {hint})"):
-                st.session_state.topic = prompt
+
+            # File upload and text input container
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+
+                with col1:
+                    uploaded_file = st.file_uploader(
+                        "Upload a file (optional)",
+                        type=['png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'docx', 'doc'],
+                        help="Upload images, PDFs, or documents to generate structured questions from",
+                        key=f"file_uploader_pp_structured_{st.session_state.pp_structured_uploader_id}"
+                    )
+
+                with col2:
+                    if st.button("🗑️ Clear", help="Clear uploaded file"):
+                        st.session_state.pp_structured_uploader_id += 1
+                        st.rerun()
+
+                prompt = st.chat_input(f"Topic for structured Q? (e.g. {hint})")
+
+            if prompt or uploaded_file:
+                # Process uploaded file if any
+                combined_prompt = prompt or ""
+
+                if uploaded_file:
+                    _, file_ai_content = process_uploaded_file(uploaded_file)
+                    if file_ai_content:
+                        combined_prompt += f"\n\n{file_ai_content}"
+
+                st.session_state.topic = combined_prompt
                 with st.spinner("📝 Generating DSE structured question…"):
                     q_text = generate_pp_long(prompt, subject)
                     if q_text:

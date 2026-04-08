@@ -96,6 +96,63 @@ class Database:
             return False
 
     # ─────────────────────────────────────────────────────────────
+    # EMAIL VERIFICATION
+    # ─────────────────────────────────────────────────────────────
+
+    def store_verification_code(self, email: str, code: str, expires_in_minutes: int = 15) -> bool:
+        """Store email verification code temporarily."""
+        if not self.client:
+            return False
+        try:
+            expires_at = datetime.now() + timedelta(minutes=expires_in_minutes)
+            # For now, we'll store in a simple table. In production, consider using Redis or similar
+            # You might need to create an 'email_verifications' table
+            data = {
+                "email": email,
+                "code": code,
+                "expires_at": expires_at.isoformat(),
+                "created_at": datetime.now().isoformat()
+            }
+            # Try to insert, if exists, update
+            try:
+                self.client.table("email_verifications").insert(data).execute()
+            except Exception:
+                # If insert fails (duplicate), try update
+                self.client.table("email_verifications").update(data).eq("email", email).execute()
+            logger.info(f"Stored verification code for {email}")
+            return True
+        except Exception as e:
+            logger.error(f"Error storing verification code: {e}")
+            return False
+
+    def verify_email_code(self, email: str, code: str) -> bool:
+        """Verify email verification code."""
+        if not self.client:
+            return False
+        try:
+            response = self.client.table("email_verifications").select("*").eq("email", email).eq("code", code).execute()
+            if not response.data:
+                return False
+
+            verification = response.data[0]
+            expires_at = datetime.fromisoformat(verification["expires_at"])
+            if datetime.now() > expires_at:
+                logger.warning(f"Verification code expired for {email}")
+                return False
+
+            # Code is valid, clean up
+            self.client.table("email_verifications").delete().eq("email", email).execute()
+            logger.info(f"Email verified successfully for {email}")
+            return True
+        except Exception as e:
+            logger.error(f"Error verifying email code: {e}")
+            return False
+
+    def mark_email_verified(self, user_id: str) -> bool:
+        """Mark user's email as verified."""
+        return self.update_user(user_id, {"email_verified": True})
+
+    # ─────────────────────────────────────────────────────────────
     # USAGE TRACKING
     # ─────────────────────────────────────────────────────────────
 

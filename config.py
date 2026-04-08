@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
+    # Email verification settings
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    EMAIL_FROM: str = ""
+    EMAIL_VERIFICATION_ENABLED: bool = True
 
     class Config:
         env_file = ".env"
@@ -41,6 +48,12 @@ settings = Settings(
     STRIPE_SECRET_KEY=os.getenv("STRIPE_SECRET_KEY", "") or _get_streamlit_secret("STRIPE_SECRET_KEY"),
     DEBUG=os.getenv("DEBUG", "").lower() in ("1", "true", "yes"),
     ENVIRONMENT=os.getenv("ENVIRONMENT", "") or _get_streamlit_secret("ENVIRONMENT", "development"),
+    SMTP_SERVER=os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+    SMTP_PORT=int(os.getenv("SMTP_PORT", "587")),
+    SMTP_USERNAME=os.getenv("SMTP_USERNAME", ""),
+    SMTP_PASSWORD=os.getenv("SMTP_PASSWORD", ""),
+    EMAIL_FROM=os.getenv("EMAIL_FROM", ""),
+    EMAIL_VERIFICATION_ENABLED=os.getenv("EMAIL_VERIFICATION_ENABLED", "true").lower() in ("1", "true", "yes"),
 )
 
 MAX_CHAT_HISTORY = 20
