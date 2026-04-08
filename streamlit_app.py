@@ -257,18 +257,6 @@ RULES:
 - If the detected subject seems wrong, adapt your response to fit the actual question content
 - Be flexible with interdisciplinary questions that span multiple subjects"""
 
-VOICE_SYSTEM = """You are Athena AI — a warm, engaging spoken tutor.
-Subject: {subject}
-
-Produce a listening-friendly audio lesson for the student. Use short, natural sentences and clear transitions. Include:
-- A brief introduction to the topic
-- Key concepts explained simply
-- One or two examples or analogies
-- A short recap at the end
-
-Write the response so it sounds good when spoken aloud. Do not include raw JSON or markup.
-"""
-
 PODCAST_SYSTEM = """You are Athena AI — a professional academic podcast host.
 Subject: {subject}
 
@@ -446,6 +434,23 @@ RULES:
 - Factor in Hong Kong school schedule
 - Be encouraging but honest"""
 
+FUTURE_PATH_SYSTEM = """You are Athena AI — a trusted future path planner for DSE students.
+Your job is to help a student understand how to reach their dream university and college program.
+
+Provide a clear plan that includes:
+- Admissions requirements for the requested universities/subjects
+- Estimated DSE grades or score range needed
+- Recommended subject choices, subject group focus, and key strengths to develop
+- Application strategy, supportive extracurriculars, and backup options
+- Practical steps for the next 6–12 months
+
+RULES:
+- Use Hong Kong university admissions context where applicable (JUPAS, local and top regional universities)
+- Be realistic about competitive programs and expected grade bands
+- Explain what counts most in admissions: subject combinations, predicted grades, interview/portfolio requirements
+- If the student does not provide enough detail, ask follow-up questions or make sensible assumptions based on common DSE pathways
+"""
+
 
 # ╔════════════════════════════════════════════════════════════════╗
 # ║                     API CLIENT (OPENROUTER)                    ║
@@ -504,10 +509,9 @@ DEFAULTS = {
     "pp_answer":       None,
     "pp_show_answer":  False,
     "plan":            None,
-    "voice_text":      None,
-    "voice_audio":     None,
     "podcast_text":    None,
     "podcast_audio":   None,
+    "future_path_text": None,
     "prev_subject":    None,
     "prev_mode":       None,
 }
@@ -828,7 +832,7 @@ with st.sidebar:
 
     mode = st.radio(
         "🎯 Mode",
-        ["📚 Learn", "🧠 Quiz", "📝 Past Paper", "📋 Study Planner", "🎙️ Voice", "🎧 Podcast"],
+        ["📚 Learn", "🧠 Quiz", "📝 Past Paper", "📋 Study Planner", "🛤️ Future Path Planner", " Podcast"],
         key="mode_sel",
     )
 
@@ -989,8 +993,8 @@ captions = {
     "🧠 Quiz":          "🧪 Enter a topic → answer questions → track your score",
     "📝 Past Paper":    "📋 Practice with authentic DSE-style questions",
     "📋 Study Planner": "📅 Get your personalized DSE study roadmap",
-    "🎙️ Voice":        "🔊 Listen to study content as an audio lesson",
-    "🎧 Podcast":      "🎙️ Turn your topic into an academic podcast episode",
+    "🛤️ Future Path Planner": "🌠 Plan your dream university path and target the grades needed",
+    " Podcast":      "🎙️ Turn your topic into an academic podcast episode",
 }
 st.caption(captions.get(mode, ""))
 st.divider()
@@ -1115,49 +1119,64 @@ if mode == "📚 Learn":
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#                        🎙️ VOICE MODE
+#                        🛤️ FUTURE PATH PLANNER MODE
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-elif mode == "🎙️ Voice":
+elif mode == "🛤️ Future Path Planner":
 
-    st.markdown("### 🎧 Voice Study Mode")
-    st.caption("Type a topic and get a listening-friendly study lesson with audio.")
+    st.markdown("### 🌠 Future Path Planner")
+    st.caption("Tell me your dream university and desired college subjects, and I'll map out the grades and steps you need.")
 
-    voice_prompt = st.text_area(
-        "What do you want to study?",
-        placeholder="e.g. Explain the water cycle in a way I can listen to while revising.",
-        height=120,
-        key="voice_prompt",
+    dream_university = st.text_input(
+        "Dream University / College",
+        placeholder="e.g. The University of Hong Kong, CUHK, HKUST, or a top overseas university",
+        key="future_path_university",
+    )
+    desired_subjects = st.text_area(
+        "Desired Subjects / Major",
+        placeholder="e.g. Computer Science, Biomedical Engineering, Architecture",
+        height=80,
+        key="future_path_subjects",
+    )
+    current_profile = st.text_area(
+        "Current Academic Profile / Predicted Grades",
+        placeholder="e.g. Predicted 5*, 5, 4, 4, 3 in Math, Physics, Chemistry, English",
+        height=80,
+        key="future_path_profile",
+    )
+    extra_context = st.text_area(
+        "Additional Context (optional)",
+        placeholder="e.g. extracurriculars, interests, strengths, planned exam year",
+        height=80,
+        key="future_path_extra",
     )
 
-    if st.button("Generate Voice Lesson", type="primary", use_container_width=True):
-        if not voice_prompt.strip():
-            st.warning("Please enter a topic or question to create your voice lesson.")
+    if st.button("Generate Future Path Plan", type="primary", use_container_width=True):
+        if not dream_university.strip() and not desired_subjects.strip():
+            st.warning("Please enter at least your dream university or the subjects you want to study.")
         else:
-            voice_text = call_claude(
-                VOICE_SYSTEM.format(subject=subject),
-                voice_prompt,
-                max_tokens=1200,
+            prompt_parts = [
+                f"Dream University / College: {dream_university.strip()}" if dream_university.strip() else "",
+                f"Desired Subjects / Major: {desired_subjects.strip()}" if desired_subjects.strip() else "",
+                f"Current Academic Profile: {current_profile.strip()}" if current_profile.strip() else "",
+                f"Additional Context: {extra_context.strip()}" if extra_context.strip() else "",
+            ]
+            future_path_prompt = "\n\n".join([p for p in prompt_parts if p])
+            future_path_text = call_claude(
+                FUTURE_PATH_SYSTEM,
+                future_path_prompt,
+                max_tokens=1400,
             )
-            st.session_state.voice_text = voice_text
-            st.session_state.voice_audio = text_to_speech(voice_text) if voice_text else None
+            st.session_state.future_path_text = future_path_text
             st.rerun()
 
-    if st.session_state.voice_text:
-        st.markdown("### 📘 Voice Lesson Transcript")
-        st.markdown(st.session_state.voice_text)
-        if st.session_state.voice_audio:
-            st.audio(st.session_state.voice_audio, format="audio/mp3")
-            st.download_button(
-                "Download Voice Lesson",
-                st.session_state.voice_audio,
-                file_name="athena_voice_lesson.mp3",
-                mime="audio/mp3",
-            )
+    if st.session_state.future_path_text:
+        st.markdown("### 📘 Future Path Analysis")
+        st.markdown(st.session_state.future_path_text)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#                        🎧 PODCAST MODE
+#                         PODCAST MODE
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 elif mode == "🎧 Podcast":
